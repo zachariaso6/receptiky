@@ -1,0 +1,20 @@
+{
+  "name": "Moje recepty",
+  "short_name": "Recepty",
+  "description": "Osobní kuchařka a sbírka oblíbených receptů",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FFF0F5",
+  "theme_color": "#F472B6",
+  "lang": "cs",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
