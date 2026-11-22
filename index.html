@@ -13,8 +13,10 @@
   <meta name="theme-color" content="#FFF5F8" />
   <meta name="description" content="Osobní růžová kuchařka pro ukládání oblíbených slaných i sladkých receptů." />
 
-  <!-- SVG ikona aplikace -->
+  <!-- SVG ikona aplikace + PWA manifest a iOS ikona -->
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%23F43F85'/%3E%3Ctext x='50' y='67' font-size='52' text-anchor='middle'%3E🍓%3C/text%3E%3C/svg%3E" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icon.png" />
 
   <!-- Písmo Inter -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -93,7 +95,7 @@
       transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
-    /* Jemné skrytí posuvníku v bočním menu */
+    /* Jemné skrytí posuvníku v bočním menu a galerii */
     .no-scrollbar::-webkit-scrollbar {
       display: none;
     }
@@ -109,1572 +111,1794 @@
   </style>
 </head>
 
-<body class="bg-blush-50 text-slate-800 font-sans antialiased min-h-screen overflow-x-hidden selection:bg-blush-200 selection:text-blush-700">
+<body class="bg-blush-50 text-slate-800 font-sans antialiased min-h-screen selection:bg-blush-200 selection:text-blush-700">
 
-  <!-- Hlavní kontejner aplikace: responzivní na mobilu, na desktopu centrovaný mobilní sloupec -->
-  <div class="max-w-md mx-auto min-h-screen bg-blush-50 relative flex flex-col md:shadow-2xl md:shadow-blush-200/50">
+  <!-- ==================== 1. NAČÍTACÍ OBRAZOVKA ==================== -->
+  <div id="loadingScreen" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-blush-50">
+    <div class="w-16 h-16 rounded-3xl bg-gradient-to-br from-blush-400 to-blush-600 flex items-center justify-center text-3xl shadow-soft mb-4 animate-bounce">
+      🦄
+    </div>
+    <p class="text-blush-600 font-semibold text-sm tracking-wide">Načítám kuchařku…</p>
+  </div>
 
-    <!-- ================= HLAVIČKA S TLAČÍTKEM LEVÉHO MENU A VYHLEDÁVÁNÍM ================= -->
-    <header class="sticky top-0 z-20 bg-blush-50/90 backdrop-blur-md safe-top px-5 pb-3.5 border-b border-blush-100/80">
-      <div class="flex items-center justify-between gap-3 mb-3.5">
-        <!-- Levá část: Tlačítko pro otevření bočního filtrovacího menu + Název -->
-        <div class="flex items-center gap-3">
+  <!-- ==================== 2. PŘIHLAŠOVACÍ OBRAZOVKA ==================== -->
+  <div id="loginScreen" class="hidden fixed inset-0 z-40 flex items-center justify-center p-5 bg-gradient-to-b from-blush-50 via-blush-100/50 to-blush-50">
+    <div class="w-full max-w-sm bg-white/95 backdrop-blur-md rounded-3xl p-7 shadow-soft border border-blush-100 animate-slide-up">
+      <div class="flex flex-col items-center text-center mb-6">
+        <div class="w-16 h-16 rounded-3xl bg-gradient-to-br from-blush-400 to-blush-600 flex items-center justify-center text-3xl shadow-soft mb-3">
+          🦄
+        </div>
+        <h1 class="text-2xl font-extrabold text-slate-800 tracking-tight">Moje Recepty</h1>
+        <p class="text-sm text-slate-500 mt-1">Přihlas se pro vstup do své kuchařky</p>
+      </div>
+
+      <form id="loginForm" class="space-y-4">
+        <div>
+          <label for="loginEmail" class="block text-xs font-semibold text-slate-600 mb-1.5 ml-1">E-mail</label>
+          <input
+            id="loginEmail"
+            type="email"
+            required
+            autocomplete="email"
+            placeholder="tvuj@email.cz"
+            class="w-full px-4 py-3 rounded-2xl bg-blush-50/70 border border-blush-200 focus:border-blush-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blush-200 transition text-sm"
+          />
+        </div>
+
+        <div>
+          <label for="loginPassword" class="block text-xs font-semibold text-slate-600 mb-1.5 ml-1">Heslo</label>
+          <input
+            id="loginPassword"
+            type="password"
+            required
+            autocomplete="current-password"
+            placeholder="••••••••"
+            class="w-full px-4 py-3 rounded-2xl bg-blush-50/70 border border-blush-200 focus:border-blush-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blush-200 transition text-sm"
+          />
+        </div>
+
+        <p id="loginError" class="hidden text-xs font-medium text-rose-600 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2"></p>
+
+        <button
+          id="loginSubmitBtn"
+          type="submit"
+          class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-blush-500 to-blush-600 hover:from-blush-600 hover:to-blush-700 active:scale-[0.98] text-white font-bold text-sm shadow-fab transition flex items-center justify-center gap-2"
+        >
+          <span>Přihlásit se</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================== 3. HLAVNÍ APLIKACE ==================== -->
+  <div id="appContainer" class="hidden min-h-screen flex flex-col">
+
+    <!-- Horní lišta -->
+    <header class="sticky top-0 z-20 bg-blush-50/90 backdrop-blur-lg border-b border-blush-100 safe-top">
+      <div class="max-w-4xl mx-auto px-4 pb-3">
+        <div class="flex items-center justify-between gap-3 mb-3">
+          <!-- Levé tlačítko pro vysunutí kategorií -->
           <button
-            id="open-drawer-btn"
+            id="openDrawerBtn"
             type="button"
-            aria-label="Otevřít filtrovací menu"
-            class="relative w-11 h-11 rounded-2xl bg-white border border-blush-200/80 text-blush-600 shadow-sm flex items-center justify-center hover:bg-blush-100/60 active:scale-90 transition"
+            aria-label="Otevřít kategorie"
+            class="w-11 h-11 rounded-2xl bg-white border border-blush-200/80 shadow-sm flex items-center justify-center text-blush-600 hover:bg-blush-100/60 active:scale-95 transition shrink-0"
           >
-            <!-- Ikona menu / filtru -->
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.3" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h12m-12 5.25h7.5" />
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M4 12h12M4 17h16" />
             </svg>
-            <!-- Růžová tečka signalizující aktivní filtr -->
-            <span
-              id="drawer-filter-dot"
-              class="hidden absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-blush-500 border-2 border-blush-50"
-            ></span>
           </button>
 
-          <div>
-            <h1 class="text-xl font-extrabold tracking-tight text-slate-900 leading-tight">Moje Recepty</h1>
-            <p id="recipe-count-label" class="text-xs font-medium text-blush-600">Načítání...</p>
+          <!-- Název -->
+          <div class="flex-1 min-w-0">
+            <h1 class="text-xl font-extrabold text-slate-800 tracking-tight truncate flex items-center gap-1.5">
+              <span>Moje Recepty</span>
+              <span class="text-lg">🦄</span>
+            </h1>
+            <p id="headerSubtitle" class="text-xs text-slate-500 font-medium truncate">Všechny recepty</p>
+          </div>
+
+          <!-- Počet receptů -->
+          <div id="recipeCountBadge" class="px-3 py-1.5 rounded-full bg-blush-100 text-blush-700 text-xs font-bold shrink-0">
+            0
           </div>
         </div>
 
-        <!-- Pravá část: Dekorativní ikona kuchařky -->
-        <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-blush-400 to-blush-500 flex items-center justify-center shadow-soft text-lg select-none">
-          	🦄
+        <!-- Vyhledávání -->
+        <div class="relative">
+          <svg class="w-4 h-4 text-blush-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15z" />
+          </svg>
+          <input
+            id="searchInput"
+            type="search"
+            placeholder="Hledat recept nebo ingredienci…"
+            class="w-full pl-11 pr-10 py-2.5 rounded-2xl bg-white border border-blush-200/80 shadow-sm text-sm placeholder:text-slate-400 focus:outline-none focus:border-blush-400 focus:ring-2 focus:ring-blush-200 transition"
+          />
+          <button
+            id="clearSearchBtn"
+            type="button"
+            class="hidden absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-blush-100 text-blush-600 flex items-center justify-center text-xs font-bold"
+            aria-label="Vymazat hledání"
+          >
+            ✕
+          </button>
         </div>
-      </div>
 
-      <!-- Vyhledávací lišta (název i ingredience) -->
-      <div class="relative">
-        <span class="absolute left-4 top-1/2 -translate-y-1/2 text-blush-400 pointer-events-none">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35m1.85-5.15a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-        </span>
-        <input
-          id="search-input"
-          type="text"
-          placeholder="Hledat recept nebo ingredienci..."
-          class="w-full bg-white text-sm text-slate-800 placeholder-slate-400 pl-11 pr-10 py-3.5 rounded-2xl border border-blush-100 shadow-sm focus:outline-none focus:ring-2 focus:ring-blush-300 focus:border-blush-300 transition"
-        />
-        <button
-          id="clear-search-btn"
-          type="button"
-          aria-label="Vymazat hledání"
-          class="hidden absolute right-3 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-blush-100 text-blush-600 flex items-center justify-center hover:bg-blush-200 transition"
-        >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-
-      <!-- Aktivní filtr zobrazený jako malý růžový štítek pod vyhledáváním -->
-      <div id="active-filter-bar" class="hidden pt-2.5 flex items-center gap-2 flex-wrap">
-        <button
-          id="active-filter-pill"
-          type="button"
-          class="inline-flex items-center gap-1.5 bg-blush-500 hover:bg-blush-600 active:scale-95 text-white text-xs font-semibold pl-3 pr-2.5 py-1.5 rounded-full shadow-sm transition"
-        >
-          <span id="active-filter-text"></span>
-          <span class="w-4 h-4 rounded-full bg-white/25 flex items-center justify-center text-[10px] leading-none">✕</span>
-        </button>
+        <!-- Aktivní filtr jako štítek -->
+        <div id="activeFilterBar" class="hidden mt-2.5 flex items-center gap-2 flex-wrap">
+          <button
+            id="clearFilterChip"
+            type="button"
+            class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blush-500 text-white text-xs font-semibold shadow-sm hover:bg-blush-600 active:scale-95 transition"
+          >
+            <span id="activeFilterLabel">Filtr</span>
+            <span class="ml-0.5 text-blush-100">✕</span>
+          </button>
+        </div>
       </div>
     </header>
 
-    <!-- ================= HLAVNÍ OBSAH: SEZNAM RECEPTŮ ================= -->
-    <main class="flex-1 px-5 pt-4 pb-28">
-      <div id="recipes-grid" class="space-y-4">
-        <!-- Karty receptů se vykreslují přes JavaScript -->
-      </div>
+    <!-- Seznam receptů -->
+    <main class="flex-1 max-w-4xl w-full mx-auto px-4 pt-4 pb-28">
+      <div id="recipesGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
 
       <!-- Prázdný stav -->
-      <div id="empty-state" class="hidden text-center py-14 px-6 bg-white rounded-3xl border border-blush-100 shadow-card mt-2">
-        <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-blush-100 flex items-center justify-center text-3xl">
+      <div id="emptyState" class="hidden flex-col items-center justify-center text-center py-16 px-6">
+        <div class="w-20 h-20 rounded-3xl bg-blush-100 flex items-center justify-center text-4xl mb-4 shadow-sm">
           🧁
         </div>
-        <h2 id="empty-title" class="text-lg font-bold text-slate-800 mb-1">Zatím tu nic není</h2>
-        <p id="empty-subtitle" class="text-sm text-slate-500 mb-5">Přidej svůj první recept klepnutím na růžové tlačítko plus.</p>
+        <h2 id="emptyTitle" class="text-lg font-bold text-slate-800">Zatím tu nejsou žádné recepty</h2>
+        <p id="emptyDesc" class="text-sm text-slate-500 mt-1 max-w-xs">
+          Přidej svůj první oblíbený recept klepnutím na růžové tlačítko plus vpravo dole.
+        </p>
         <button
-          id="empty-action-btn"
+          id="emptyAddBtn"
           type="button"
-          class="inline-flex items-center gap-2 bg-blush-500 hover:bg-blush-600 active:scale-95 text-white font-semibold text-sm px-5 py-3 rounded-2xl shadow-soft transition"
+          class="mt-5 px-5 py-2.5 rounded-2xl bg-blush-500 hover:bg-blush-600 active:scale-95 text-white font-semibold text-sm shadow-soft transition"
         >
-          Přidat recept
+          + Přidat první recept
         </button>
       </div>
     </main>
 
-    <!-- ================= PLOVOUCÍ TLAČÍTKO "+" (FAB) ================= -->
-    <div class="fixed bottom-6 right-5 md:right-auto md:left-1/2 md:translate-x-[148px] z-30 safe-bottom">
-      <button
-        id="add-recipe-fab"
-        type="button"
-        aria-label="Přidat nový recept"
-        class="w-16 h-16 rounded-full bg-gradient-to-br from-blush-400 to-blush-600 text-white shadow-fab flex items-center justify-center hover:brightness-105 active:scale-90 transition-transform duration-150"
-      >
-        <svg class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="2.6" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-        </svg>
-      </button>
-    </div>
-
+    <!-- Plovoucí tlačítko (+) pro přidání receptu -->
+    <button
+      id="fabAddBtn"
+      type="button"
+      aria-label="Přidat nový recept"
+      class="fixed right-5 bottom-6 z-20 w-14 h-14 rounded-full bg-gradient-to-br from-blush-400 to-blush-600 text-white shadow-fab flex items-center justify-center hover:scale-105 active:scale-95 transition safe-bottom"
+      style="padding-bottom: 0; bottom: max(1.5rem, env(safe-area-inset-bottom));"
+    >
+      <svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="2.6" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14M5 12h14" />
+      </svg>
+    </button>
   </div>
 
-  <!-- ================= LEVÉ FILTROVACÍ MENU (DRAWER) ================= -->
-  <div id="filter-drawer-root" class="fixed inset-0 z-50 pointer-events-none hidden" aria-hidden="true">
-    <!-- Rozmazané tmavé pozadí -->
-    <div
-      id="drawer-backdrop"
-      class="drawer-backdrop absolute inset-0 bg-slate-900/45 backdrop-blur-sm opacity-0"
-    ></div>
-
-    <!-- Samotný boční panel vysouvaný zleva -->
+  <!-- ==================== 4. LEVÉ VYSOUVACÍ MENU (DRAWER) ==================== -->
+  <div id="drawerOverlay" class="fixed inset-0 z-30 pointer-events-none">
+    <div id="drawerBackdrop" class="drawer-backdrop fixed inset-0 bg-slate-900/35 backdrop-blur-[2px] opacity-0"></div>
     <aside
-      id="drawer-panel"
-      class="drawer-panel relative w-[84%] max-w-[320px] h-full bg-blush-50 shadow-2xl flex flex-col -translate-x-full rounded-r-[2rem] overflow-hidden"
+      id="drawerPanel"
+      class="drawer-panel fixed top-0 left-0 bottom-0 w-[82%] max-w-xs bg-white shadow-2xl -translate-x-full flex flex-col safe-top safe-bottom"
     >
-      <!-- Hlavička bočního panelu -->
-      <div class="bg-white safe-top px-5 pb-4 border-b border-blush-100 flex items-center justify-between shrink-0">
+      <!-- Hlavička menu -->
+      <div class="px-5 pt-2 pb-4 border-b border-blush-100 flex items-center justify-between">
         <div class="flex items-center gap-2.5">
-          <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-blush-400 to-blush-500 flex items-center justify-center text-base shadow-sm">
-            🍓
-          </div>
+          <div class="w-9 h-9 rounded-2xl bg-blush-100 flex items-center justify-center text-lg">🍓</div>
           <div>
-            <h2 class="text-base font-extrabold text-slate-900 leading-tight">Kategorie</h2>
-            <p class="text-[11px] font-medium text-blush-500">Vyber, na co máš chuť</p>
+            <h2 class="font-extrabold text-slate-800 text-base leading-tight">Kategorie</h2>
+            <p class="text-[11px] text-slate-400 font-medium">Vyber si, na co máš chuť</p>
           </div>
         </div>
-
         <button
-          id="close-drawer-btn"
+          id="closeDrawerBtn"
           type="button"
           aria-label="Zavřít menu"
-          class="w-9 h-9 rounded-xl bg-blush-50 text-slate-500 hover:text-blush-600 hover:bg-blush-100 flex items-center justify-center active:scale-90 transition"
+          class="w-9 h-9 rounded-xl bg-blush-50 text-blush-600 flex items-center justify-center hover:bg-blush-100 transition"
         >
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.3" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
+          ✕
         </button>
       </div>
 
-      <!-- Posouvatelný seznam hierarchických kategorií -->
-      <nav id="drawer-nav" class="flex-1 overflow-y-auto no-scrollbar px-3.5 py-4 space-y-2 safe-bottom">
-        <!-- Vykreslí se dynamicky přes JavaScript -->
-      </nav>
+      <!-- Položky kategorií -->
+      <nav id="drawerNav" class="flex-1 overflow-y-auto no-scrollbar px-3 py-3 space-y-1.5"></nav>
+
+      <!-- Patička menu (účet, záloha, odhlášení) -->
+      <div class="px-4 pt-3 pb-2 border-t border-blush-100 space-y-2 bg-blush-50/50">
+        <p id="drawerUserEmail" class="text-[11px] text-slate-400 truncate px-1"></p>
+        <div class="flex gap-2">
+          <button
+            id="exportBackupBtn"
+            type="button"
+            class="flex-1 py-2 px-3 rounded-xl bg-white border border-blush-200 text-blush-700 text-xs font-semibold hover:bg-blush-50 active:scale-95 transition flex items-center justify-center gap-1.5"
+          >
+            <span>💾</span>
+            <span>Záloha</span>
+          </button>
+          <button
+            id="logoutBtn"
+            type="button"
+            class="flex-1 py-2 px-3 rounded-xl bg-white border border-slate-200 text-slate-600 text-xs font-semibold hover:bg-slate-50 active:scale-95 transition flex items-center justify-center gap-1.5"
+          >
+            <span>Odhlásit</span>
+          </button>
+        </div>
+      </div>
     </aside>
   </div>
 
-  <!-- ================= MODÁLNÍ OKNO: DETAIL RECEPTU ================= -->
-  <div id="detail-modal" class="hidden fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm flex items-end md:items-center justify-center animate-fade-in">
-    <div class="bg-blush-50 w-full max-w-md h-[94vh] md:h-[88vh] rounded-t-[2rem] md:rounded-[2rem] overflow-hidden flex flex-col shadow-2xl animate-slide-up">
+  <!-- ==================== 5. DETAIL RECEPTU (MODAL S GALERIÍ) ==================== -->
+  <div id="detailModal" class="hidden fixed inset-0 z-40 flex items-end sm:items-center justify-center bg-slate-900/45 backdrop-blur-[2px] animate-fade-in">
+    <div class="bg-white w-full max-w-xl max-h-[92vh] sm:rounded-3xl rounded-t-3xl overflow-hidden flex flex-col shadow-2xl animate-slide-up">
+      <!-- Horní galerie obrázků -->
+      <div class="relative h-60 sm:h-64 bg-gradient-to-br from-blush-100 to-blush-200 shrink-0 select-none">
+        <!-- Swipeovatelný pás fotek -->
+        <div
+          id="detailGalleryTrack"
+          class="hidden w-full h-full flex overflow-x-auto snap-x snap-mandatory no-scrollbar scroll-smooth"
+        ></div>
 
-      <!-- Horní lišta s fotkou a tlačítky -->
-      <div class="relative shrink-0">
-        <div id="detail-hero" class="w-full h-60 relative overflow-hidden"></div>
+        <!-- Náhradní ikona, když recept nemá fotku -->
+        <div id="detailPlaceholder" class="w-full h-full flex items-center justify-center text-6xl">🍓</div>
 
-        <!-- Tlačítko Zpět -->
+        <!-- Levá a pravá šipka pro listování (zobrazí se jen při 2+ fotkách) -->
         <button
-          id="close-detail-btn"
+          id="detailGalleryPrev"
           type="button"
-          aria-label="Zavřít detail"
-          class="absolute top-4 left-4 w-11 h-11 rounded-full bg-white/90 backdrop-blur-md text-slate-800 shadow-md flex items-center justify-center active:scale-90 transition"
+          aria-label="Předchozí fotka"
+          class="hidden absolute left-2.5 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-sm text-white flex items-center justify-center transition active:scale-95 z-10"
         >
           <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
         </button>
+        <button
+          id="detailGalleryNext"
+          type="button"
+          aria-label="Další fotka"
+          class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-sm text-white flex items-center justify-center transition active:scale-95 z-10"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
 
-        <!-- Akční tlačítka vpravo: Oblíbené, Upravit, Smazat -->
-        <div class="absolute top-4 right-4 flex items-center gap-2">
+        <!-- Tečky a počítadlo dole přes fotku -->
+        <div id="detailGalleryDots" class="hidden absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/35 backdrop-blur-sm z-10"></div>
+        <div id="detailGalleryCounter" class="hidden absolute bottom-3 right-3 px-2.5 py-1 rounded-full bg-black/50 backdrop-blur-sm text-white text-[11px] font-bold z-10">
+          1 / 1
+        </div>
+        <div id="detailFullscreenHint" class="hidden absolute bottom-3 left-3 px-2.5 py-1 rounded-full bg-black/45 backdrop-blur-sm text-white text-[11px] font-medium pointer-events-none z-10">
+          🔍 Klepni pro zvětšení
+        </div>
+
+        <!-- Horní akční tlačítka přes fotku -->
+        <div class="absolute top-3 left-3 right-3 flex items-center justify-between z-10 pointer-events-none">
           <button
-            id="detail-favorite-btn"
+            id="closeDetailBtn"
             type="button"
-            aria-label="Přidat do oblíbených"
-            class="w-11 h-11 rounded-full bg-white/90 backdrop-blur-md shadow-md flex items-center justify-center active:scale-90 transition"
+            aria-label="Zavřít detail"
+            class="pointer-events-auto w-10 h-10 rounded-full bg-white/90 backdrop-blur text-slate-700 shadow-md flex items-center justify-center font-bold hover:bg-white active:scale-95 transition"
           >
-            <!-- Srdíčko se vykresluje dynamicky -->
+            ✕
           </button>
-          <button
-            id="edit-recipe-btn"
-            type="button"
-            aria-label="Upravit recept"
-            class="w-11 h-11 rounded-full bg-white/90 backdrop-blur-md text-blush-600 shadow-md flex items-center justify-center active:scale-90 transition"
-          >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
-            </svg>
-          </button>
-          <button
-            id="delete-recipe-btn"
-            type="button"
-            aria-label="Smazat recept"
-            class="w-11 h-11 rounded-full bg-white/90 backdrop-blur-md text-rose-600 shadow-md flex items-center justify-center active:scale-90 transition"
-          >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-            </svg>
-          </button>
+
+          <div class="flex items-center gap-2 pointer-events-auto">
+            <button
+              id="detailFavBtn"
+              type="button"
+              aria-label="Oblíbený recept"
+              class="w-10 h-10 rounded-full bg-white/90 backdrop-blur shadow-md flex items-center justify-center text-lg hover:bg-white active:scale-95 transition"
+            >
+              🤍
+            </button>
+            <button
+              id="detailEditBtn"
+              type="button"
+              aria-label="Upravit recept"
+              class="w-10 h-10 rounded-full bg-white/90 backdrop-blur text-blush-600 shadow-md flex items-center justify-center hover:bg-white active:scale-95 transition"
+            >
+              ✏️
+            </button>
+            <button
+              id="detailDeleteBtn"
+              type="button"
+              aria-label="Smazat recept"
+              class="w-10 h-10 rounded-full bg-white/90 backdrop-blur text-rose-600 shadow-md flex items-center justify-center hover:bg-white active:scale-95 transition"
+            >
+              🗑️
+            </button>
+          </div>
         </div>
       </div>
 
-      <!-- Posouvatelný obsah detailu -->
-      <div class="flex-1 overflow-y-auto px-5 pt-5 pb-10 space-y-5">
+      <!-- Obsah detailu -->
+      <div class="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5 safe-bottom">
         <div>
-          <h2 id="detail-title" class="text-2xl font-extrabold text-slate-900 leading-snug mb-3"></h2>
-          <div id="detail-badges" class="flex flex-wrap gap-2"></div>
+          <div id="detailCategoryBadge" class="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-blush-100 text-blush-700 text-xs font-bold mb-2"></div>
+          <h2 id="detailTitle" class="text-2xl font-extrabold text-slate-800 leading-snug"></h2>
+          <div id="detailMeta" class="flex flex-wrap items-center gap-3 mt-2.5 text-xs font-semibold text-slate-500"></div>
         </div>
 
-        <!-- Interaktivní seznam ingrediencí -->
-        <section class="bg-white rounded-3xl p-5 shadow-card border border-blush-100">
-          <div class="flex items-center justify-between mb-3.5">
-            <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
-              <span class="text-lg">🥣</span> Ingredience
-            </h3>
-            <span id="ingredients-progress" class="text-xs font-semibold text-blush-600 bg-blush-50 px-2.5 py-1 rounded-full"></span>
+        <!-- Ingredience (odškrtávací) -->
+        <div id="detailIngredientsSection">
+          <div class="flex items-center justify-between mb-2.5">
+            <h3 class="text-sm font-extrabold uppercase tracking-wider text-blush-600">Ingredience</h3>
+            <span class="text-[11px] text-slate-400">Klepnutím odškrtneš</span>
           </div>
-          <ul id="detail-ingredients" class="space-y-2"></ul>
-        </section>
+          <ul id="detailIngredientsList" class="space-y-2"></ul>
+        </div>
 
-        <!-- Postup přípravy -->
-        <section class="bg-white rounded-3xl p-5 shadow-card border border-blush-100">
-          <h3 class="text-base font-bold text-slate-900 flex items-center gap-2 mb-3">
-            <span class="text-lg">👩‍🍳</span> Postup přípravy
-          </h3>
-          <div id="detail-steps" class="text-sm text-slate-700 leading-relaxed space-y-3 whitespace-pre-line"></div>
-        </section>
+        <!-- Postup -->
+        <div id="detailInstructionsSection">
+          <h3 class="text-sm font-extrabold uppercase tracking-wider text-blush-600 mb-2.5">Postup</h3>
+          <div id="detailInstructions" class="text-sm text-slate-700 leading-relaxed whitespace-pre-line bg-blush-50/60 border border-blush-100 rounded-2xl p-4"></div>
+        </div>
 
         <!-- Poznámky -->
-        <section id="detail-notes-section" class="hidden bg-blush-100/70 rounded-3xl p-5 border border-blush-200/70">
-          <h3 class="text-sm font-bold text-blush-700 flex items-center gap-2 mb-2">
-            <span>💌</span> Poznámky
-          </h3>
-          <p id="detail-notes" class="text-sm text-blush-700/90 leading-relaxed whitespace-pre-line"></p>
-        </section>
+        <div id="detailNotesSection" class="hidden">
+          <h3 class="text-sm font-extrabold uppercase tracking-wider text-blush-600 mb-2">Poznámky</h3>
+          <div id="detailNotes" class="text-sm text-slate-600 leading-relaxed whitespace-pre-line bg-amber-50/70 border border-amber-200/70 rounded-2xl p-3.5"></div>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- ================= MODÁLNÍ OKNO: PŘIDÁNÍ / ÚPRAVA RECEPTU ================= -->
-  <div id="form-modal" class="hidden fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-end md:items-center justify-center animate-fade-in">
-    <div class="bg-blush-50 w-full max-w-md h-[94vh] md:h-[90vh] rounded-t-[2rem] md:rounded-[2rem] overflow-hidden flex flex-col shadow-2xl animate-slide-up">
+  <!-- ==================== 5b. CELOOBRAZOVKOVÝ PROHLÍŽEČ FOTEK (LIGHTBOX) ==================== -->
+  <div id="lightboxModal" class="hidden fixed inset-0 z-50 bg-black/95 flex flex-col justify-between animate-fade-in select-none">
+    <!-- Horní lišta lightboxu -->
+    <div class="flex items-center justify-between px-4 py-3 safe-top">
+      <div id="lightboxCounter" class="text-white/90 text-sm font-bold px-3 py-1 rounded-full bg-white/10">
+        1 / 1
+      </div>
+      <button
+        id="closeLightboxBtn"
+        type="button"
+        aria-label="Zavřít zvětšenou fotku"
+        class="w-10 h-10 rounded-full bg-white/15 hover:bg-white/25 text-white flex items-center justify-center font-bold text-lg active:scale-95 transition"
+      >
+        ✕
+      </button>
+    </div>
 
+    <!-- Obrázek uprostřed + šipky -->
+    <div id="lightboxStage" class="relative flex-1 flex items-center justify-center px-3 overflow-hidden">
+      <button
+        id="lightboxPrevBtn"
+        type="button"
+        aria-label="Předchozí fotka"
+        class="hidden absolute left-3 z-10 w-11 h-11 rounded-full bg-white/15 hover:bg-white/25 text-white flex items-center justify-center active:scale-95 transition"
+      >
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+        </svg>
+      </button>
+
+      <img
+        id="lightboxImg"
+        src=""
+        alt="Zvětšená fotka receptu"
+        class="max-h-[82vh] max-w-full object-contain rounded-xl shadow-2xl transition-opacity duration-150"
+      />
+
+      <button
+        id="lightboxNextBtn"
+        type="button"
+        aria-label="Další fotka"
+        class="hidden absolute right-3 z-10 w-11 h-11 rounded-full bg-white/15 hover:bg-white/25 text-white flex items-center justify-center active:scale-95 transition"
+      >
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
+    </div>
+
+    <!-- Spodní tečky lightboxu -->
+    <div class="py-4 safe-bottom flex items-center justify-center">
+      <div id="lightboxDots" class="flex items-center gap-2"></div>
+    </div>
+  </div>
+
+  <!-- ==================== 6. FORMULÁŘ PŘIDÁNÍ / ÚPRAVY RECEPTU ==================== -->
+  <div id="formModal" class="hidden fixed inset-0 z-40 flex items-end sm:items-center justify-center bg-slate-900/45 backdrop-blur-[2px] animate-fade-in">
+    <div class="bg-white w-full max-w-xl max-h-[92vh] sm:rounded-3xl rounded-t-3xl overflow-hidden flex flex-col shadow-2xl animate-slide-up">
       <!-- Hlavička formuláře -->
-      <div class="bg-white px-5 py-4 border-b border-blush-100 flex items-center justify-between shrink-0">
+      <div class="px-5 py-4 border-b border-blush-100 flex items-center justify-between bg-blush-50/50 shrink-0">
+        <h2 id="formModalTitle" class="text-lg font-extrabold text-slate-800">Nový recept</h2>
         <button
-          id="close-form-btn"
+          id="closeFormBtn"
           type="button"
-          class="text-sm font-semibold text-slate-500 hover:text-slate-700 py-2 px-1"
+          aria-label="Zavřít formulář"
+          class="w-9 h-9 rounded-full bg-white border border-blush-200 text-slate-600 flex items-center justify-center font-bold hover:bg-blush-50 transition"
         >
-          Zrušit
-        </button>
-        <h2 id="form-modal-title" class="text-base font-bold text-slate-900">Nový recept</h2>
-        <button
-          id="save-form-top-btn"
-          type="button"
-          class="text-sm font-bold text-blush-600 hover:text-blush-700 py-2 px-1"
-        >
-          	🦄
+          ✕
         </button>
       </div>
 
       <!-- Formulář -->
-      <form id="recipe-form" class="flex-1 overflow-y-auto px-5 py-5 space-y-5 safe-bottom">
-        <input type="hidden" id="field-id" />
-
-        <!-- Nahrání fotky -->
+      <form id="recipeForm" class="flex-1 overflow-y-auto p-5 space-y-4 safe-bottom">
+        <!-- Nahrání více fotek -->
         <div>
-          <label class="block text-xs font-bold uppercase tracking-wider text-blush-600 mb-2">Fotka jídla</label>
-          <div class="relative rounded-3xl overflow-hidden bg-white border-2 border-dashed border-blush-200 hover:border-blush-400 transition">
-            <div id="photo-preview-wrapper" class="hidden relative h-48 w-full">
-              <img id="photo-preview-img" src="" alt="Náhled fotky" class="w-full h-full object-cover" />
-              <button
-                id="remove-photo-btn"
-                type="button"
-                class="absolute top-3 right-3 bg-slate-900/70 text-white text-xs font-semibold px-3 py-1.5 rounded-full backdrop-blur-sm active:scale-95 transition"
-              >
-                Odebrat fotku
-              </button>
-            </div>
+          <div class="flex items-center justify-between mb-1.5">
+            <label class="block text-xs font-bold text-slate-600">Fotky jídla</label>
+            <span id="photoCountHint" class="text-[11px] text-slate-400">První fotka je hlavní</span>
+          </div>
 
-            <label id="photo-upload-label" for="field-photo" class="flex flex-col items-center justify-center py-8 px-4 cursor-pointer text-center">
-              <div class="w-12 h-12 rounded-2xl bg-blush-100 text-blush-500 flex items-center justify-center mb-2.5">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
-                </svg>
-              </div>
-              <span class="text-sm font-semibold text-slate-700">Vybrat fotku z mobilu</span>
-              <span class="text-xs text-slate-400 mt-0.5">Automaticky se zmenší (max 800 px)</span>
+          <!-- Náhledy nahraných fotek -->
+          <div id="photosPreviewGrid" class="hidden grid grid-cols-3 gap-2.5 mb-2.5"></div>
+
+          <!-- Tlačítko pro přidání fotek (podporuje výběr více fotek najednou) -->
+          <div class="relative rounded-2xl border-2 border-dashed border-blush-200 bg-blush-50/50 overflow-hidden">
+            <label
+              id="photoUploadLabel"
+              for="photoInput"
+              class="flex flex-col items-center justify-center py-6 px-4 cursor-pointer hover:bg-blush-100/50 transition text-center"
+            >
+              <span class="text-3xl mb-1">📸</span>
+              <span id="photoUploadTitle" class="text-sm font-semibold text-blush-600">Vybrat nebo vyfotit jídlo</span>
+              <span class="text-[11px] text-slate-400 mt-0.5">Můžeš přidat jednu nebo více fotek najednou</span>
             </label>
-            <input id="field-photo" type="file" accept="image/*" class="hidden" />
+            <input id="photoInput" type="file" accept="image/*" multiple class="hidden" />
           </div>
         </div>
 
         <!-- Název receptu -->
         <div>
-          <label for="field-title" class="block text-xs font-bold uppercase tracking-wider text-blush-600 mb-1.5">Název receptu *</label>
+          <label for="recipeTitleInput" class="block text-xs font-bold text-slate-600 mb-1.5">Název receptu *</label>
           <input
-            id="field-title"
+            id="recipeTitleInput"
             type="text"
             required
-            placeholder="Např. Malinovo-čokoládový dort"
-            class="w-full bg-white rounded-2xl px-4 py-3.5 text-sm text-slate-800 border border-blush-100 focus:outline-none focus:ring-2 focus:ring-blush-300"
+            placeholder="Např. Domácí jahodový dort"
+            class="w-full px-4 py-3 rounded-2xl bg-blush-50/60 border border-blush-200 focus:bg-white focus:border-blush-500 focus:outline-none focus:ring-2 focus:ring-blush-200 text-sm transition"
           />
         </div>
 
-        <!-- Hlavní skupina (Slané / Sladké) a dynamická Podkategorie -->
+        <!-- Hlavní kategorie + Podkategorie -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label for="field-main-group" class="block text-xs font-bold uppercase tracking-wider text-blush-600 mb-1.5">Hlavní skupina *</label>
+            <label for="mainCategorySelect" class="block text-xs font-bold text-slate-600 mb-1.5">Skupina *</label>
             <select
-              id="field-main-group"
-              class="w-full bg-white rounded-2xl px-4 py-3.5 text-sm text-slate-800 border border-blush-100 focus:outline-none focus:ring-2 focus:ring-blush-300"
+              id="mainCategorySelect"
+              required
+              class="w-full px-4 py-3 rounded-2xl bg-blush-50/60 border border-blush-200 focus:bg-white focus:border-blush-500 focus:outline-none focus:ring-2 focus:ring-blush-200 text-sm transition"
             >
-              <option value="Slané">🥗 Slané</option>
-              <option value="Sladké">🍰 Sladké</option>
+              <option value="slane">🍲 Slané</option>
+              <option value="sladke">🍰 Sladké</option>
             </select>
           </div>
+
           <div>
-            <label for="field-subcategory" class="block text-xs font-bold uppercase tracking-wider text-blush-600 mb-1.5">Podkategorie *</label>
+            <label for="subCategorySelect" class="block text-xs font-bold text-slate-600 mb-1.5">Kategorie *</label>
             <select
-              id="field-subcategory"
-              class="w-full bg-white rounded-2xl px-4 py-3.5 text-sm text-slate-800 border border-blush-100 focus:outline-none focus:ring-2 focus:ring-blush-300"
-            >
-              <!-- Možnosti se doplňují dynamicky podle hlavní skupiny -->
-            </select>
+              id="subCategorySelect"
+              required
+              class="w-full px-4 py-3 rounded-2xl bg-blush-50/60 border border-blush-200 focus:bg-white focus:border-blush-500 focus:outline-none focus:ring-2 focus:ring-blush-200 text-sm transition"
+            ></select>
           </div>
         </div>
 
-        <!-- Doba přípravy a počet porcí -->
+        <!-- Čas a porce -->
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label for="field-time" class="block text-xs font-bold uppercase tracking-wider text-blush-600 mb-1.5">Čas (minuty)</label>
+            <label for="prepTimeInput" class="block text-xs font-bold text-slate-600 mb-1.5">Doba přípravy</label>
             <input
-              id="field-time"
-              type="number"
-              min="1"
-              max="999"
-              placeholder="30"
-              class="w-full bg-white rounded-2xl px-4 py-3.5 text-sm text-slate-800 border border-blush-100 focus:outline-none focus:ring-2 focus:ring-blush-300"
+              id="prepTimeInput"
+              type="text"
+              placeholder="Např. 30 min"
+              class="w-full px-4 py-3 rounded-2xl bg-blush-50/60 border border-blush-200 focus:bg-white focus:border-blush-500 focus:outline-none focus:ring-2 focus:ring-blush-200 text-sm transition"
             />
           </div>
+
           <div>
-            <label for="field-servings" class="block text-xs font-bold uppercase tracking-wider text-blush-600 mb-1.5">Počet porcí</label>
+            <label for="servingsInput" class="block text-xs font-bold text-slate-600 mb-1.5">Počet porcí</label>
             <input
-              id="field-servings"
-              type="number"
-              min="1"
-              max="99"
-              placeholder="4"
-              class="w-full bg-white rounded-2xl px-4 py-3.5 text-sm text-slate-800 border border-blush-100 focus:outline-none focus:ring-2 focus:ring-blush-300"
+              id="servingsInput"
+              type="text"
+              placeholder="Např. 4 porce"
+              class="w-full px-4 py-3 rounded-2xl bg-blush-50/60 border border-blush-200 focus:bg-white focus:border-blush-500 focus:outline-none focus:ring-2 focus:ring-blush-200 text-sm transition"
             />
           </div>
         </div>
 
         <!-- Ingredience -->
         <div>
-          <label for="field-ingredients" class="block text-xs font-bold uppercase tracking-wider text-blush-600 mb-1.5">
-            Ingredience * <span class="font-normal normal-case text-slate-400">(každá na nový řádek)</span>
+          <label for="ingredientsInput" class="block text-xs font-bold text-slate-600 mb-1.5">
+            Ingredience <span class="font-normal text-slate-400">(každá na nový řádek)</span>
           </label>
           <textarea
-            id="field-ingredients"
-            rows="5"
-            required
-            placeholder="200 g hladké mouky&#10;150 g cukru&#10;2 vejce"
-            class="w-full bg-white rounded-2xl px-4 py-3.5 text-sm text-slate-800 border border-blush-100 focus:outline-none focus:ring-2 focus:ring-blush-300 leading-relaxed"
+            id="ingredientsInput"
+            rows="4"
+            placeholder="200 g hladké mouky&#10;2 vejce&#10;250 ml mléka"
+            class="w-full px-4 py-3 rounded-2xl bg-blush-50/60 border border-blush-200 focus:bg-white focus:border-blush-500 focus:outline-none focus:ring-2 focus:ring-blush-200 text-sm transition resize-y"
           ></textarea>
         </div>
 
-        <!-- Postup přípravy -->
+        <!-- Postup -->
         <div>
-          <label for="field-steps" class="block text-xs font-bold uppercase tracking-wider text-blush-600 mb-1.5">Postup přípravy *</label>
+          <label for="instructionsInput" class="block text-xs font-bold text-slate-600 mb-1.5">Postup</label>
           <textarea
-            id="field-steps"
+            id="instructionsInput"
             rows="5"
-            required
-            placeholder="1. Předehřej troubu na 180 °C...&#10;2. Smíchej suché suroviny..."
-            class="w-full bg-white rounded-2xl px-4 py-3.5 text-sm text-slate-800 border border-blush-100 focus:outline-none focus:ring-2 focus:ring-blush-300 leading-relaxed"
+            placeholder="1. Smíchej suché ingredience…&#10;2. Přidej mléko a vejce…"
+            class="w-full px-4 py-3 rounded-2xl bg-blush-50/60 border border-blush-200 focus:bg-white focus:border-blush-500 focus:outline-none focus:ring-2 focus:ring-blush-200 text-sm transition resize-y"
           ></textarea>
         </div>
 
         <!-- Poznámky -->
         <div>
-          <label for="field-notes" class="block text-xs font-bold uppercase tracking-wider text-blush-600 mb-1.5">Poznámky (volitelné)</label>
+          <label for="notesInput" class="block text-xs font-bold text-slate-600 mb-1.5">Poznámky / tipy</label>
           <textarea
-            id="field-notes"
-            rows="3"
-            placeholder="Tipy, obměny, s čím podávat..."
-            class="w-full bg-white rounded-2xl px-4 py-3.5 text-sm text-slate-800 border border-blush-100 focus:outline-none focus:ring-2 focus:ring-blush-300 leading-relaxed"
+            id="notesInput"
+            rows="2"
+            placeholder="Např. Skvělé s čerstvou šlehačkou…"
+            class="w-full px-4 py-3 rounded-2xl bg-blush-50/60 border border-blush-200 focus:bg-white focus:border-blush-500 focus:outline-none focus:ring-2 focus:ring-blush-200 text-sm transition resize-y"
           ></textarea>
         </div>
 
-        <!-- Tlačítko Uložit -->
-        <button
-          type="submit"
-          class="w-full bg-gradient-to-r from-blush-500 to-blush-600 hover:brightness-105 active:scale-[0.98] text-white font-bold text-base py-4 rounded-2xl shadow-soft transition"
-        >
-          	🦄
-        </button>
+        <!-- Tlačítko uložit -->
+        <div class="pt-2">
+          <button
+            id="saveRecipeBtn"
+            type="submit"
+            class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-blush-500 to-blush-600 hover:from-blush-600 hover:to-blush-700 active:scale-[0.98] disabled:opacity-60 text-white font-bold text-sm shadow-fab transition flex items-center justify-center gap-2"
+          >
+            <span>🦄</span>
+          </button>
+        </div>
       </form>
     </div>
   </div>
 
-  <!-- ================= VLASTNÍ POTVRZOVACÍ DIALOG (MÍSTO CONFIRM) ================= -->
-  <div id="confirm-modal" class="hidden fixed inset-0 z-[60] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-6 animate-fade-in">
-    <div class="bg-white w-full max-w-xs rounded-3xl p-6 text-center shadow-2xl animate-slide-up">
-      <div class="w-12 h-12 mx-auto mb-3 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center text-2xl">
-        🗑️
-      </div>
-      <h3 class="text-lg font-bold text-slate-900 mb-1.5">Smazat recept?</h3>
-      <p id="confirm-message" class="text-sm text-slate-500 mb-6">Tuto akci už nepůjde vrátit zpět.</p>
-      <div class="grid grid-cols-2 gap-3">
-        <button
-          id="confirm-cancel-btn"
-          type="button"
-          class="py-3 px-4 rounded-2xl bg-blush-50 text-slate-700 font-semibold text-sm hover:bg-blush-100 active:scale-95 transition"
-        >
-          Zrušit
-        </button>
-        <button
-          id="confirm-delete-btn"
-          type="button"
-          class="py-3 px-4 rounded-2xl bg-rose-500 text-white font-semibold text-sm hover:bg-rose-600 active:scale-95 transition shadow-sm"
-        >
-          Smazat
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ================= TOAST NOTIFIKACE (MÍSTO ALERT) ================= -->
+  <!-- ==================== 7. TOAST OZNÁMENÍ ==================== -->
   <div
     id="toast"
-    class="fixed top-6 left-1/2 -translate-x-1/2 z-[70] pointer-events-none opacity-0 transition-all duration-300 -translate-y-3"
-  >
-    <div id="toast-inner" class="bg-slate-900/90 text-white text-sm font-medium px-5 py-3 rounded-full shadow-lg backdrop-blur-md whitespace-nowrap">
-      Uloženo
-    </div>
-  </div>
+    class="fixed left-1/2 -translate-x-1/2 bottom-6 z-50 px-4 py-2.5 rounded-full bg-slate-800/95 text-white text-xs font-semibold shadow-lg pointer-events-none opacity-0 transition-opacity duration-200"
+  ></div>
 
-  <!-- ================= JAVASCRIPT LOGIKA APLIKACE ================= -->
-  <script>
-    // =========================================================================
-    // 1. KONFIGURACE HIERARCHICKÝCH KATEGORIÍ A VÝCHOZÍCH RECEPTŮ
-    // =========================================================================
+  <!-- ==================== 8. JAVASCRIPT (FIREBASE + CLOUDINARY) ==================== -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import {
+      getAuth,
+      signInWithEmailAndPassword,
+      signOut,
+      onAuthStateChanged
+    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import {
+      getFirestore,
+      collection,
+      addDoc,
+      updateDoc,
+      deleteDoc,
+      doc,
+      onSnapshot,
+      query,
+      orderBy,
+      serverTimestamp
+    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-    const STORAGE_KEY = 'moje_recepty_pwa_v2';
-
-    // Kompletní hierarchie kategorií pro levé menu i formulář
-    const CATEGORY_TREE = [
-      {
-        id: 'Slané',
-        label: 'Slané',
-        emoji: '🥗',
-        subcategories: [
-          { id: 'Polévky', emoji: '🍲' },
-          { id: 'Hlavní jídla', emoji: '🍛' },
-          { id: 'Těstoviny & Rizota', emoji: '🍝' },
-          { id: 'Saláty', emoji: '🥬' },
-          { id: 'Pomazánky & Svačiny', emoji: '🥪' },
-          { id: 'Slané pečení', emoji: '🥧' },
-          { id: 'Rychlovky', emoji: '⚡' },
-        ],
-      },
-      {
-        id: 'Sladké',
-        label: 'Sladké',
-        emoji: '🍰',
-        subcategories: [
-          { id: 'Dorty', emoji: '🎂' },
-          { id: 'Buchty & Koláče', emoji: '🥮' },
-          { id: 'Zákusky & Dezerty', emoji: '🧁' },
-          { id: 'Sušenky & Cukroví', emoji: '🍪' },
-          { id: 'Sladké snídaně', emoji: '🥞' },
-          { id: 'Nepečené', emoji: '🍓' },
-        ],
-      },
-    ];
-
-    // 4 české ukázkové recepty napříč kategoriemi při prvním spuštění
-    const SAMPLE_RECIPES = [
-      {
-        id: 'sample-1',
-        title: 'Krémová dýňová polévka',
-        mainGroup: 'Slané',
-        subCategory: 'Polévky',
-        time: 35,
-        servings: 4,
-        photo: '',
-        isFavorite: false,
-        ingredients: [
-          '1 menší dýně Hokkaido (cca 800 g)',
-          '1 větší cibule',
-          '2 stroužky česneku',
-          '1 lžíce másla nebo olivového oleje',
-          '800 ml zeleninového vývaru',
-          '150 ml smetany ke šlehání (nebo kokosového mléka)',
-          'Špetka muškátového oříšku, sůl a pepř',
-          'Dýňová semínka na ozdobu',
-        ],
-        steps:
-          '1. Dýni Hokkaido důkladně omyj, rozkroj, vydlabej semínka a nakrájej i se slupkou na kostky.\n\n2. V hrnci rozehřej máslo a dozlatova orestuj nadrobno nakrájenou cibuli. Přidej nasekaný česnek a kostky dýně a krátce společně opékej.\n\n3. Zalij vývarem, osol, opepři a vař pod pokličkou cca 20 minut do úplného změknutí dýně.\n\n4. Polévku rozmixuj tyčovým mixérem do hladkého krému, zjemni smetanou a dochuť špetkou muškátového oříšku.\n\n5. Podávej s opraženými dýňovými semínky a zakápnutou trochou smetany.',
-        notes: 'Výborná je i s kouskem nastrouhaného čerstvého zázvoru, který krásně zahřeje.',
-        createdAt: Date.now() - 400000,
-      },
-      {
-        id: 'sample-2',
-        title: 'Těstoviny s rajčaty a bazalkou',
-        mainGroup: 'Slané',
-        subCategory: 'Těstoviny & Rizota',
-        time: 20,
-        servings: 2,
-        photo: '',
-        isFavorite: true,
-        ingredients: [
-          '200 g těstovin (špagety nebo penne)',
-          '300 g sladkých cherry rajčátek',
-          '2 stroužky česneku',
-          '2 lžíce kvalitního olivového oleje',
-          'Hrst čerstvé bazalky',
-          '40 g strouhaného parmazánu',
-          'Sůl a čerstvě mletý pepř',
-        ],
-        steps:
-          '1. Těstoviny uvař v osolené vodě na skus (al dente). Před scezením si odeber půl hrnku vody z vaření.\n\n2. Na pánvi rozehřej olivový olej, přidej rozpůlená cherry rajčátka a opékej je cca 5 minut, dokud nezměknou a nepustí sladkou šťávu.\n\n3. Přidej na plátky nakrájený česnek a nech ho 1 minutu rozvonět.\n\n4. Vmíchej uvařené těstoviny, přilij trochu vody z těstovin a přidej polovinu parmazánu, aby se vytvořila lesklá omáčka.\n\n5. Odstav z plotny, vmíchej natrhanou čerstvou bazalku a podávej posypané zbytkem parmazánu.',
-        notes: 'Pokud chceš krémovější verzi, přidej na závěr kuličku čerstvé burraty nebo lžíci ricotty.',
-        createdAt: Date.now() - 300000,
-      },
-      {
-        id: 'sample-3',
-        title: 'Malinovo-čokoládový dort',
-        mainGroup: 'Sladké',
-        subCategory: 'Dorty',
-        time: 65,
-        servings: 8,
-        photo: '',
-        isFavorite: true,
-        ingredients: [
-          '180 g hladké mouky',
-          '150 g cukru krupice',
-          '40 g kvalitního kakaa',
-          '3 vejce',
-          '120 ml oleje a 150 ml podmáslí',
-          '1 lžička kypřicího prášku',
-          '250 g mascarpone + 200 ml smetany ke šlehání',
-          '250 g čerstvých malin',
-          '100 g hořké čokolády na polevu',
-        ],
-        steps:
-          '1. Předehřej troubu na 175 °C a vylož dortovou formu (průměr 20 cm) pečicím papírem.\n\n2. Vyšlehej vejce s cukrem do světlé pěny, přilij olej a podmáslí. Nakonec jemně vmíchej prosátou mouku s kakaem a kypřicím práškem.\n\n3. Peč cca 35–40 minut (zkus špejlí) a nech korpus úplně vychladnout.\n\n4. Vyšlehej mascarpone se smetanou a lžící moučkového cukru do pevného krému. Korpus prokroj, potři krémem a bohatě poklaď malinami.\n\n5. Slož dort, vršek polij rozpuštěnou čokoládou s lžící smetany a dozdob čerstvými malinami.',
-        notes: 'Nejlepší je až druhý den, kdy se korpus krásně rozleží a nasákne vůní malin.',
-        createdAt: Date.now() - 200000,
-      },
-      {
-        id: 'sample-4',
-        title: 'Vláčná hrníčková bábovka',
-        mainGroup: 'Sladké',
-        subCategory: 'Buchty & Koláče',
-        time: 55,
-        servings: 10,
-        photo: '',
-        isFavorite: false,
-        ingredients: [
-          '2 hrnky polohrubé mouky',
-          '1 hrnek cukru krupice',
-          '1 hrnek mléka',
-          '1/2 hrnku rostlinného oleje',
-          '2 vejce',
-          '1 balíček kypřicího prášku do pečiva',
-          '1 vanilkový cukr',
-          '2 lžíce kakaa na mramorování',
-        ],
-        steps:
-          '1. Troubu rozehřej na 175 °C. Formu na bábovku pečlivě vymaž máslem a vysyp hrubou moukou.\n\n2. V míse vyšlehej vejce s oběma cukry, přilij mléko a olej.\n\n3. Postupně vmíchej polohrubou mouku smíchanou s kypřicím práškem do hladkého těsta.\n\n4. Dvě třetiny světlého těsta nalij do formy. Do zbytku vmíchej kakao (případně lžíci mléka) a nalij navrch.\n\n5. Peč 40–45 minut dozlatova. Po mírném zchladnutí vyklop a pocukruj moučkovým cukrem.',
-        notes: 'Do těsta můžeš přidat nastrouhanou citronovou kůru nebo hrst nasekané čokolády.',
-        createdAt: Date.now() - 100000,
-      },
-    ];
-
-    // =========================================================================
-    // 2. STAV APLIKACE (STATE)
-    // =========================================================================
-
-    let recipes = [];
-
-    // Aktivní filtr:
-    // type: 'all' | 'favorites' | 'main' | 'sub'
-    let activeFilter = { type: 'all', mainGroup: null, subCategory: null };
-
-    // Výchozí stav rozbalení sekcí v levém menu (obě přehledně rozbalené)
-    let expandedGroups = {
-      'Slané': true,
-      'Sladké': true,
+    // ----- KONFIGURACE FIREBASE -----
+    const firebaseConfig = {
+      apiKey: "AIzaSyCpWaKbrq6u256kquxrBopxHrp_2Nt-ZdI",
+      authDomain: "receptiky-fa01d.firebaseapp.com",
+      projectId: "receptiky-fa01d",
+      storageBucket: "receptiky-fa01d.firebasestorage.app",
+      messagingSenderId: "787871589299",
+      appId: "1:787871589299:web:f58266bb4194547d45a1c6",
+      measurementId: "G-D1DC899F9Y"
     };
 
-    let searchQuery = '';
-    let activeRecipeId = null;
-    let currentPhotoDataUrl = '';
-    let checkedIngredients = {};
+    // ----- KONFIGURACE CLOUDINARY -----
+    const CLOUDINARY_CLOUD_NAME = "av21dq5w";
+    const CLOUDINARY_UPLOAD_PRESET = "recepty_fotky";
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const recipesCol = collection(db, "recipes");
+
+    // ----- DEFINICE KATEGORIÍ -----
+    const CATEGORIES = {
+      slane: {
+        label: "Slané",
+        emoji: "🍲",
+        subs: [
+          { id: "hlavni-jidla", label: "Hlavní jídla", emoji: "🍛" },
+          { id: "polevky", label: "Polévky", emoji: "🥣" },
+          { id: "testoviny-rizota", label: "Těstoviny a rizota", emoji: "🍝" },
+          { id: "salaty", label: "Saláty", emoji: "🥗" },
+          { id: "snidane-brunch", label: "Snídaně a brunch", emoji: "🍳" },
+          { id: "pomazanky-chutovky", label: "Pomazánky a chuťovky", emoji: "🥖" },
+          { id: "pecivo-slane-kolace", label: "Pečivo a slané koláče", emoji: "🥐" }
+        ]
+      },
+      sladke: {
+        label: "Sladké",
+        emoji: "🍰",
+        subs: [
+          { id: "dorty", label: "Dorty", emoji: "🎂" },
+          { id: "buchty-kolace", label: "Buchty a koláče", emoji: "🥧" },
+          { id: "dezerty-pohary", label: "Dezerty a poháry", emoji: "🍨" },
+          { id: "palacinky-livance", label: "Palačinky a lívance", emoji: "🥞" },
+          { id: "susenky-cukrovi", label: "Sušenky a cukroví", emoji: "🍪" },
+          { id: "sladke-snidane", label: "Sladké snídaně", emoji: "🍓" }
+        ]
+      }
+    };
+
+    // ----- STAV APLIKACE -----
+    let recipes = [];
+    let unsubscribeRecipes = null;
+    let currentFilter = { type: "all" }; // 'all' | 'favorites' | 'main' | 'sub'
+    let expandedGroups = { slane: true, sladke: true };
+    let searchQuery = "";
+    let activeDetailId = null;
+    let detailImages = [];
+    let detailCurrentSlide = 0;
+
+    // Stav lightboxu
+    let lightboxImages = [];
+    let lightboxIndex = 0;
+    let lightboxTouchStartX = 0;
+
+    // Stav formuláře (více fotek)
+    let editingRecipeId = null;
+    let formPhotos = []; // [{ type: 'existing', url } | { type: 'new', file, previewUrl }]
+
+    // ----- DOM ELEMENTY -----
+    const loadingScreen = document.getElementById("loadingScreen");
+    const loginScreen = document.getElementById("loginScreen");
+    const loginForm = document.getElementById("loginForm");
+    const loginEmail = document.getElementById("loginEmail");
+    const loginPassword = document.getElementById("loginPassword");
+    const loginError = document.getElementById("loginError");
+    const loginSubmitBtn = document.getElementById("loginSubmitBtn");
+    const appContainer = document.getElementById("appContainer");
+
+    const openDrawerBtn = document.getElementById("openDrawerBtn");
+    const closeDrawerBtn = document.getElementById("closeDrawerBtn");
+    const drawerOverlay = document.getElementById("drawerOverlay");
+    const drawerBackdrop = document.getElementById("drawerBackdrop");
+    const drawerPanel = document.getElementById("drawerPanel");
+    const drawerNav = document.getElementById("drawerNav");
+    const drawerUserEmail = document.getElementById("drawerUserEmail");
+    const exportBackupBtn = document.getElementById("exportBackupBtn");
+    const logoutBtn = document.getElementById("logoutBtn");
+
+    const headerSubtitle = document.getElementById("headerSubtitle");
+    const recipeCountBadge = document.getElementById("recipeCountBadge");
+    const searchInput = document.getElementById("searchInput");
+    const clearSearchBtn = document.getElementById("clearSearchBtn");
+    const activeFilterBar = document.getElementById("activeFilterBar");
+    const activeFilterLabel = document.getElementById("activeFilterLabel");
+    const clearFilterChip = document.getElementById("clearFilterChip");
+
+    const recipesGrid = document.getElementById("recipesGrid");
+    const emptyState = document.getElementById("emptyState");
+    const emptyTitle = document.getElementById("emptyTitle");
+    const emptyDesc = document.getElementById("emptyDesc");
+    const emptyAddBtn = document.getElementById("emptyAddBtn");
+    const fabAddBtn = document.getElementById("fabAddBtn");
+
+    // Detail modal + galerie
+    const detailModal = document.getElementById("detailModal");
+    const closeDetailBtn = document.getElementById("closeDetailBtn");
+    const detailGalleryTrack = document.getElementById("detailGalleryTrack");
+    const detailGalleryPrev = document.getElementById("detailGalleryPrev");
+    const detailGalleryNext = document.getElementById("detailGalleryNext");
+    const detailGalleryDots = document.getElementById("detailGalleryDots");
+    const detailGalleryCounter = document.getElementById("detailGalleryCounter");
+    const detailFullscreenHint = document.getElementById("detailFullscreenHint");
+    const detailPlaceholder = document.getElementById("detailPlaceholder");
+    const detailFavBtn = document.getElementById("detailFavBtn");
+    const detailEditBtn = document.getElementById("detailEditBtn");
+    const detailDeleteBtn = document.getElementById("detailDeleteBtn");
+    const detailCategoryBadge = document.getElementById("detailCategoryBadge");
+    const detailTitle = document.getElementById("detailTitle");
+    const detailMeta = document.getElementById("detailMeta");
+    const detailIngredientsSection = document.getElementById("detailIngredientsSection");
+    const detailIngredientsList = document.getElementById("detailIngredientsList");
+    const detailInstructionsSection = document.getElementById("detailInstructionsSection");
+    const detailInstructions = document.getElementById("detailInstructions");
+    const detailNotesSection = document.getElementById("detailNotesSection");
+    const detailNotes = document.getElementById("detailNotes");
+
+    // Lightbox modal
+    const lightboxModal = document.getElementById("lightboxModal");
+    const closeLightboxBtn = document.getElementById("closeLightboxBtn");
+    const lightboxStage = document.getElementById("lightboxStage");
+    const lightboxImg = document.getElementById("lightboxImg");
+    const lightboxPrevBtn = document.getElementById("lightboxPrevBtn");
+    const lightboxNextBtn = document.getElementById("lightboxNextBtn");
+    const lightboxCounter = document.getElementById("lightboxCounter");
+    const lightboxDots = document.getElementById("lightboxDots");
+
+    // Form modal
+    const formModal = document.getElementById("formModal");
+    const formModalTitle = document.getElementById("formModalTitle");
+    const closeFormBtn = document.getElementById("closeFormBtn");
+    const recipeForm = document.getElementById("recipeForm");
+    const photoInput = document.getElementById("photoInput");
+    const photosPreviewGrid = document.getElementById("photosPreviewGrid");
+    const photoUploadTitle = document.getElementById("photoUploadTitle");
+    const photoCountHint = document.getElementById("photoCountHint");
+    const recipeTitleInput = document.getElementById("recipeTitleInput");
+    const mainCategorySelect = document.getElementById("mainCategorySelect");
+    const subCategorySelect = document.getElementById("subCategorySelect");
+    const prepTimeInput = document.getElementById("prepTimeInput");
+    const servingsInput = document.getElementById("servingsInput");
+    const ingredientsInput = document.getElementById("ingredientsInput");
+    const instructionsInput = document.getElementById("instructionsInput");
+    const notesInput = document.getElementById("notesInput");
+    const saveRecipeBtn = document.getElementById("saveRecipeBtn");
+
+    const toastEl = document.getElementById("toast");
     let toastTimer = null;
 
-    // =========================================================================
-    // 3. REFERENCE NA HTML ELEMENTY
-    // =========================================================================
-
-    const els = {
-      openDrawerBtn: document.getElementById('open-drawer-btn'),
-      drawerFilterDot: document.getElementById('drawer-filter-dot'),
-      recipeCountLabel: document.getElementById('recipe-count-label'),
-      searchInput: document.getElementById('search-input'),
-      clearSearchBtn: document.getElementById('clear-search-btn'),
-      activeFilterBar: document.getElementById('active-filter-bar'),
-      activeFilterPill: document.getElementById('active-filter-pill'),
-      activeFilterText: document.getElementById('active-filter-text'),
-      recipesGrid: document.getElementById('recipes-grid'),
-      emptyState: document.getElementById('empty-state'),
-      emptyTitle: document.getElementById('empty-title'),
-      emptySubtitle: document.getElementById('empty-subtitle'),
-      emptyActionBtn: document.getElementById('empty-action-btn'),
-      addRecipeFab: document.getElementById('add-recipe-fab'),
-
-      // Levý filtrovací drawer
-      drawerRoot: document.getElementById('filter-drawer-root'),
-      drawerBackdrop: document.getElementById('drawer-backdrop'),
-      drawerPanel: document.getElementById('drawer-panel'),
-      closeDrawerBtn: document.getElementById('close-drawer-btn'),
-      drawerNav: document.getElementById('drawer-nav'),
-
-      // Detail modal
-      detailModal: document.getElementById('detail-modal'),
-      detailHero: document.getElementById('detail-hero'),
-      detailTitle: document.getElementById('detail-title'),
-      detailBadges: document.getElementById('detail-badges'),
-      detailIngredients: document.getElementById('detail-ingredients'),
-      ingredientsProgress: document.getElementById('ingredients-progress'),
-      detailSteps: document.getElementById('detail-steps'),
-      detailNotesSection: document.getElementById('detail-notes-section'),
-      detailNotes: document.getElementById('detail-notes'),
-      closeDetailBtn: document.getElementById('close-detail-btn'),
-      detailFavoriteBtn: document.getElementById('detail-favorite-btn'),
-      editRecipeBtn: document.getElementById('edit-recipe-btn'),
-      deleteRecipeBtn: document.getElementById('delete-recipe-btn'),
-
-      // Form modal
-      formModal: document.getElementById('form-modal'),
-      formModalTitle: document.getElementById('form-modal-title'),
-      recipeForm: document.getElementById('recipe-form'),
-      closeFormBtn: document.getElementById('close-form-btn'),
-      saveFormTopBtn: document.getElementById('save-form-top-btn'),
-      fieldId: document.getElementById('field-id'),
-      fieldPhoto: document.getElementById('field-photo'),
-      photoPreviewWrapper: document.getElementById('photo-preview-wrapper'),
-      photoPreviewImg: document.getElementById('photo-preview-img'),
-      photoUploadLabel: document.getElementById('photo-upload-label'),
-      removePhotoBtn: document.getElementById('remove-photo-btn'),
-      fieldTitle: document.getElementById('field-title'),
-      fieldMainGroup: document.getElementById('field-main-group'),
-      fieldSubCategory: document.getElementById('field-subcategory'),
-      fieldTime: document.getElementById('field-time'),
-      fieldServings: document.getElementById('field-servings'),
-      fieldIngredients: document.getElementById('field-ingredients'),
-      fieldSteps: document.getElementById('field-steps'),
-      fieldNotes: document.getElementById('field-notes'),
-
-      // Confirm modal
-      confirmModal: document.getElementById('confirm-modal'),
-      confirmMessage: document.getElementById('confirm-message'),
-      confirmCancelBtn: document.getElementById('confirm-cancel-btn'),
-      confirmDeleteBtn: document.getElementById('confirm-delete-btn'),
-
-      // Toast
-      toast: document.getElementById('toast'),
-      toastInner: document.getElementById('toast-inner'),
-    };
-
-    // =========================================================================
-    // 4. UKLÁDÁNÍ A NAČÍTÁNÍ DAT (LOCALSTORAGE)
-    // =========================================================================
-
-    function loadRecipes() {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (raw === null) {
-          recipes = [...SAMPLE_RECIPES];
-          saveRecipes();
-        } else {
-          const parsed = JSON.parse(raw);
-          recipes = Array.isArray(parsed) ? parsed : [];
-        }
-      } catch (err) {
-        console.error('Chyba při načítání dat z localStorage:', err);
-        recipes = [...SAMPLE_RECIPES];
-        showToast('Nepodařilo se načíst uložená data.', true);
-      }
-    }
-
-    function saveRecipes() {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(recipes));
-        return true;
-      } catch (err) {
-        console.error('Chyba při ukládání do localStorage:', err);
-        showToast('Úložiště prohlížeče je plné. Zkus recept uložit bez fotky.', true);
-        return false;
-      }
-    }
-
-    // =========================================================================
-    // 5. POMOCNÉ FUNKCE
-    // =========================================================================
-
-    function getCategoryEmoji(mainGroup, subCategory) {
-      const groupObj = CATEGORY_TREE.find((g) => g.id === mainGroup);
-      if (groupObj) {
-        const subObj = groupObj.subcategories.find((s) => s.id === subCategory);
-        if (subObj) return subObj.emoji;
-        return groupObj.emoji;
-      }
-      return '🍽️';
-    }
-
-    function formatRecipeCount(count) {
-      if (count === 1) return '1 uložený recept';
-      if (count >= 2 && count <= 4) return `${count} uložené recepty`;
-      return `${count} uložených receptů`;
-    }
-
-    function formatServings(servings) {
-      const n = Number(servings);
-      if (!n) return '';
-      if (n === 1) return '1 porce';
-      if (n >= 2 && n <= 4) return `${n} porce`;
-      return `${n} porcí`;
-    }
-
-    function escapeHtml(str) {
-      return String(str || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-    }
-
-    function getHeartSvg(isFavorite, sizeClass = 'w-5 h-5') {
-      if (isFavorite) {
-        return `<svg class="${sizeClass} text-blush-500 fill-blush-500" viewBox="0 0 24 24">
-          <path d="M11.645 20.91l-.007-.003-.022-.012a15.247 15.247 0 01-.383-.218 25.18 25.18 0 01-4.244-3.17C4.688 15.36 2.25 12.174 2.25 8.25 2.25 5.322 4.714 3 7.688 3A5.5 5.5 0 0112 5.052 5.5 5.5 0 0116.313 3c2.973 0 5.437 2.322 5.437 5.25 0 3.925-2.438 7.111-4.739 9.256a25.175 25.175 0 01-4.244 3.17 15.247 15.247 0 01-.383.219l-.022.012-.007.004-.003.001a.752.752 0 01-.704 0l-.003-.001z" />
-        </svg>`;
-      }
-      return `<svg class="${sizeClass} text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
-      </svg>`;
-    }
-
-    function showToast(message, isError = false) {
-      els.toastInner.textContent = message;
-      els.toastInner.className = isError
-        ? 'bg-rose-600 text-white text-sm font-semibold px-5 py-3 rounded-full shadow-lg whitespace-nowrap'
-        : 'bg-slate-900/90 text-white text-sm font-medium px-5 py-3 rounded-full shadow-lg backdrop-blur-md whitespace-nowrap';
-
-      els.toast.classList.remove('opacity-0', '-translate-y-3');
-      els.toast.classList.add('opacity-100', 'translate-y-0');
-
+    // ----- POMOCNÉ FUNKCE -----
+    function showToast(msg) {
+      toastEl.textContent = msg;
+      toastEl.classList.remove("opacity-0");
       clearTimeout(toastTimer);
-      toastTimer = setTimeout(() => {
-        els.toast.classList.add('opacity-0', '-translate-y-3');
-        els.toast.classList.remove('opacity-100', 'translate-y-0');
-      }, 2500);
+      toastTimer = setTimeout(() => toastEl.classList.add("opacity-0"), 2600);
     }
 
-    // Automatické zmenšení a komprese fotky (max šířka 800 px, JPEG 0.75)
-    function resizeImageFile(file, maxWidth = 800, quality = 0.75) {
+    function escapeHtml(str = "") {
+      return str
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    // Zpětná kompatibilita: přečte nové pole `images` i starší `imageUrl`
+    function getRecipeImages(recipe) {
+      if (Array.isArray(recipe?.images) && recipe.images.length > 0) {
+        return recipe.images.filter(Boolean);
+      }
+      if (recipe?.imageUrl) {
+        return [recipe.imageUrl];
+      }
+      return [];
+    }
+
+    function getCategoryInfo(mainId, subId) {
+      const main = CATEGORIES[mainId] || CATEGORIES.slane;
+      const sub = main.subs.find((s) => s.id === subId) || main.subs[0];
+      return { main, sub };
+    }
+
+    function populateSubCategories(mainId, selectedSubId = null) {
+      const main = CATEGORIES[mainId] || CATEGORIES.slane;
+      subCategorySelect.innerHTML = main.subs
+        .map((s) => `<option value="${s.id}">${s.emoji} ${s.label}</option>`)
+        .join("");
+      if (selectedSubId && main.subs.some((s) => s.id === selectedSubId)) {
+        subCategorySelect.value = selectedSubId;
+      }
+    }
+
+    // Zmenšení fotky před odesláním na Cloudinary (rychlé nahrávání i na mobilních datech)
+    function compressImage(file, maxSize = 1400, quality = 0.85) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
-        reader.onload = (event) => {
+        reader.onerror = reject;
+        reader.onload = (e) => {
           const img = new Image();
+          img.onerror = reject;
           img.onload = () => {
             let { width, height } = img;
-            if (width > maxWidth) {
-              height = Math.round((height * maxWidth) / width);
-              width = maxWidth;
+            if (width > maxSize || height > maxSize) {
+              if (width > height) {
+                height = Math.round((height * maxSize) / width);
+                width = maxSize;
+              } else {
+                width = Math.round((width * maxSize) / height);
+                height = maxSize;
+              }
             }
-            const canvas = document.createElement('canvas');
+            const canvas = document.createElement("canvas");
             canvas.width = width;
             canvas.height = height;
-            const ctx = canvas.getContext('2d');
+            const ctx = canvas.getContext("2d");
             ctx.drawImage(img, 0, 0, width, height);
-            resolve(canvas.toDataURL('image/jpeg', quality));
+            canvas.toBlob(
+              (blob) => {
+                if (blob) resolve(blob);
+                else reject(new Error("Nepodařilo se zpracovat obrázek."));
+              },
+              "image/jpeg",
+              quality
+            );
           };
-          img.onerror = () => reject(new Error('Obrázek se nepodařilo zpracovat.'));
-          img.src = event.target.result;
+          img.src = e.target.result;
         };
-        reader.onerror = () => reject(new Error('Soubor se nepodařilo načíst.'));
         reader.readAsDataURL(file);
       });
     }
 
-    // =========================================================================
-    // 6. LEVÉ FILTROVACÍ MENU (DRAWER) A AKTIVNÍ FILTR
-    // =========================================================================
+    // Nahrání fotky do Cloudinary
+    async function uploadToCloudinary(file) {
+      const compressedBlob = await compressImage(file);
+      const formData = new FormData();
+      formData.append("file", compressedBlob, "recipe.jpg");
+      formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
 
+      const response = await fetch(
+        `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
+        {
+          method: "POST",
+          body: formData
+        }
+      );
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error("Chyba nahrávání fotky: " + errText);
+      }
+
+      const data = await response.json();
+      return data.secure_url;
+    }
+
+    // ----- PŘIHLÁŠENÍ A ODBĚR DAT Z FIRESTORE -----
+    onAuthStateChanged(auth, (user) => {
+      loadingScreen.classList.add("hidden");
+
+      if (user) {
+        loginScreen.classList.add("hidden");
+        appContainer.classList.remove("hidden");
+        drawerUserEmail.textContent = user.email || "";
+        startRecipesListener();
+      } else {
+        if (unsubscribeRecipes) {
+          unsubscribeRecipes();
+          unsubscribeRecipes = null;
+        }
+        recipes = [];
+        appContainer.classList.add("hidden");
+        loginScreen.classList.remove("hidden");
+      }
+    });
+
+    loginForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      loginError.classList.add("hidden");
+      loginSubmitBtn.disabled = true;
+      loginSubmitBtn.innerHTML = "<span>Přihlašuji…</span>";
+
+      try {
+        await signInWithEmailAndPassword(
+          auth,
+          loginEmail.value.trim(),
+          loginPassword.value
+        );
+        loginForm.reset();
+      } catch (err) {
+        let msg = "Přihlášení se nepodařilo. Zkontroluj e-mail a heslo.";
+        if (err.code === "auth/too-many-requests") {
+          msg = "Příliš mnoho pokusů. Zkus to prosím za chvilku.";
+        } else if (err.code === "auth/network-request-failed") {
+          msg = "Chybí připojení k internetu.";
+        }
+        loginError.textContent = msg;
+        loginError.classList.remove("hidden");
+      } finally {
+        loginSubmitBtn.disabled = false;
+        loginSubmitBtn.innerHTML = "<span>Přihlásit se</span>";
+      }
+    });
+
+    logoutBtn.addEventListener("click", async () => {
+      closeDrawer();
+      await signOut(auth);
+      showToast("Odhlášeno");
+    });
+
+    function startRecipesListener() {
+      if (unsubscribeRecipes) unsubscribeRecipes();
+      const q = query(recipesCol, orderBy("createdAt", "desc"));
+      unsubscribeRecipes = onSnapshot(
+        q,
+        (snapshot) => {
+          recipes = snapshot.docs.map((d) => ({
+            id: d.id,
+            ...d.data()
+          }));
+          renderAll();
+          if (activeDetailId) {
+            const updated = recipes.find((r) => r.id === activeDetailId);
+            if (updated) renderDetailModal(updated);
+          }
+        },
+        (err) => {
+          console.error("Firestore error:", err);
+          showToast("Chyba při načítání receptů z databáze");
+        }
+      );
+    }
+
+    // ----- VYKRESLOVÁNÍ MENU (DRAWER) -----
     function openDrawer() {
-      renderDrawerNav();
-      els.drawerRoot.classList.remove('hidden', 'pointer-events-none');
-      els.drawerRoot.setAttribute('aria-hidden', 'false');
-      document.body.style.overflow = 'hidden';
-
-      // Spuštění plynulé CSS animace v dalším snímku
-      requestAnimationFrame(() => {
-        els.drawerBackdrop.classList.remove('opacity-0');
-        els.drawerBackdrop.classList.add('opacity-100');
-        els.drawerPanel.classList.remove('-translate-x-full');
-        els.drawerPanel.classList.add('translate-x-0');
-      });
+      drawerOverlay.classList.remove("pointer-events-none");
+      drawerBackdrop.classList.remove("opacity-0");
+      drawerPanel.classList.remove("-translate-x-full");
     }
 
     function closeDrawer() {
-      els.drawerBackdrop.classList.add('opacity-0');
-      els.drawerBackdrop.classList.remove('opacity-100');
-      els.drawerPanel.classList.add('-translate-x-full');
-      els.drawerPanel.classList.remove('translate-x-0');
-      els.drawerRoot.setAttribute('aria-hidden', 'true');
-
-      setTimeout(() => {
-        els.drawerRoot.classList.add('hidden', 'pointer-events-none');
-        if (els.detailModal.classList.contains('hidden') && els.formModal.classList.contains('hidden')) {
-          document.body.style.overflow = '';
-        }
-      }, 280);
+      drawerOverlay.classList.add("pointer-events-none");
+      drawerBackdrop.classList.add("opacity-0");
+      drawerPanel.classList.add("-translate-x-full");
     }
 
-    function setFilter(newFilter, shouldCloseDrawer = true) {
-      activeFilter = newFilter;
-      renderActiveFilterBar();
-      renderRecipes();
-      renderDrawerNav();
-      if (shouldCloseDrawer) {
-        closeDrawer();
-      }
-    }
+    openDrawerBtn.addEventListener("click", openDrawer);
+    closeDrawerBtn.addEventListener("click", closeDrawer);
+    drawerBackdrop.addEventListener("click", closeDrawer);
 
-    function resetFilter() {
-      setFilter({ type: 'all', mainGroup: null, subCategory: null }, false);
-    }
-
-    function renderActiveFilterBar() {
-      const isDefault = activeFilter.type === 'all';
-      els.drawerFilterDot.classList.toggle('hidden', isDefault);
-
-      if (isDefault) {
-        els.activeFilterBar.classList.add('hidden');
-        return;
-      }
-
-      let label = '';
-      if (activeFilter.type === 'favorites') {
-        label = '❤️ Oblíbené';
-      } else if (activeFilter.type === 'main') {
-        const g = CATEGORY_TREE.find((c) => c.id === activeFilter.mainGroup);
-        label = `${g ? g.emoji + ' ' : ''}${activeFilter.mainGroup}`;
-      } else if (activeFilter.type === 'sub') {
-        label = `${activeFilter.mainGroup} › ${activeFilter.subCategory}`;
-      }
-
-      els.activeFilterText.textContent = label;
-      els.activeFilterBar.classList.remove('hidden');
-    }
-
-    function renderDrawerNav() {
+    function renderDrawer() {
       const totalCount = recipes.length;
-      const favCount = recipes.filter((r) => r.isFavorite).length;
+      const favCount = recipes.filter((r) => r.favorite).length;
 
-      const isAllActive = activeFilter.type === 'all';
-      const isFavActive = activeFilter.type === 'favorites';
+      const isActive = (type, mainId, subId) => {
+        if (currentFilter.type !== type) return false;
+        if (type === "main") return currentFilter.mainId === mainId;
+        if (type === "sub") return currentFilter.mainId === mainId && currentFilter.subId === subId;
+        return true;
+      };
+
+      const itemClass = (active) =>
+        active
+          ? "bg-blush-500 text-white shadow-sm font-bold"
+          : "text-slate-700 hover:bg-blush-50 font-medium";
+
+      const badgeClass = (active) =>
+        active ? "bg-white/25 text-white" : "bg-blush-100 text-blush-700";
 
       let html = `
-        <!-- Všechny recepty -->
-        <button
-          type="button"
-          data-filter-type="all"
-          class="drawer-filter-btn w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-bold transition ${
-            isAllActive
-              ? 'bg-blush-500 text-white shadow-soft'
-              : 'bg-white text-slate-700 hover:bg-blush-100/70 border border-blush-100'
-          }"
-        >
-          <span class="flex items-center gap-2.5">
-            <span class="text-base">✨</span>
-            <span>Všechny recepty</span>
-          </span>
-          <span class="text-xs font-bold px-2.5 py-0.5 rounded-full ${
-            isAllActive ? 'bg-white/25 text-white' : 'bg-blush-50 text-blush-600'
-          }">${totalCount}</span>
+        <button data-filter-type="all" class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-sm transition ${itemClass(isActive("all"))}">
+          <span class="flex items-center gap-2.5"><span>📚</span><span>Všechny recepty</span></span>
+          <span class="px-2 py-0.5 rounded-full text-xs font-bold ${badgeClass(isActive("all"))}">${totalCount}</span>
         </button>
 
-        <!-- Oblíbené -->
-        <button
-          type="button"
-          data-filter-type="favorites"
-          class="drawer-filter-btn w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-bold transition ${
-            isFavActive
-              ? 'bg-blush-500 text-white shadow-soft'
-              : 'bg-white text-slate-700 hover:bg-blush-100/70 border border-blush-100'
-          }"
-        >
-          <span class="flex items-center gap-2.5">
-            <span class="text-base">❤️</span>
-            <span>Oblíbené</span>
-          </span>
-          <span class="text-xs font-bold px-2.5 py-0.5 rounded-full ${
-            isFavActive ? 'bg-white/25 text-white' : 'bg-blush-50 text-blush-600'
-          }">${favCount}</span>
+        <button data-filter-type="favorites" class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-sm transition ${itemClass(isActive("favorites"))}">
+          <span class="flex items-center gap-2.5"><span>❤️</span><span>Oblíbené</span></span>
+          <span class="px-2 py-0.5 rounded-full text-xs font-bold ${badgeClass(isActive("favorites"))}">${favCount}</span>
         </button>
 
-        <div class="pt-2 pb-1 px-2">
-          <div class="h-px bg-blush-200/70"></div>
-        </div>
+        <div class="pt-2"></div>
       `;
 
-      // Hlavní skupiny (Slané / Sladké) a jejich rozbalovací podkategorie
-      CATEGORY_TREE.forEach((group) => {
-        const groupCount = recipes.filter((r) => r.mainGroup === group.id).length;
-        const isGroupActive = activeFilter.type === 'main' && activeFilter.mainGroup === group.id;
-        const isExpanded = !!expandedGroups[group.id];
-
-        const subcategoriesHtml = group.subcategories
-          .map((sub) => {
-            const subCount = recipes.filter(
-              (r) => r.mainGroup === group.id && r.subCategory === sub.id
-            ).length;
-            const isSubActive =
-              activeFilter.type === 'sub' &&
-              activeFilter.mainGroup === group.id &&
-              activeFilter.subCategory === sub.id;
-
-            return `
-              <button
-                type="button"
-                data-filter-type="sub"
-                data-main-group="${escapeHtml(group.id)}"
-                data-sub-category="${escapeHtml(sub.id)}"
-                class="drawer-filter-btn w-full flex items-center justify-between pl-4 pr-3 py-2.5 rounded-xl text-xs font-semibold transition ${
-                  isSubActive
-                    ? 'bg-blush-500 text-white shadow-sm'
-                    : 'text-slate-600 hover:bg-blush-100/80 hover:text-blush-700'
-                }"
-              >
-                <span class="flex items-center gap-2 truncate">
-                  <span class="text-sm">${sub.emoji}</span>
-                  <span class="truncate">${escapeHtml(sub.id)}</span>
-                </span>
-                <span class="text-[11px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
-                  isSubActive ? 'bg-white/25 text-white' : 'bg-blush-100/80 text-blush-600'
-                }">${subCount}</span>
-              </button>
-            `;
-          })
-          .join('');
+      for (const [mainId, group] of Object.entries(CATEGORIES)) {
+        const groupCount = recipes.filter((r) => r.mainCategory === mainId).length;
+        const expanded = expandedGroups[mainId];
+        const mainActive = isActive("main", mainId);
 
         html += `
-          <div class="bg-white rounded-2xl border border-blush-100 overflow-hidden shadow-xs">
-            <!-- Řádek hlavní kategorie: klik na název filtruje vše ve skupině, šipka sbaluje/rozbaluje -->
-            <div class="flex items-center ${isGroupActive ? 'bg-blush-500 text-white' : 'text-slate-800'}">
+          <div class="rounded-2xl border border-blush-100/80 bg-blush-50/30 overflow-hidden mb-2">
+            <div class="flex items-center">
               <button
-                type="button"
                 data-filter-type="main"
-                data-main-group="${escapeHtml(group.id)}"
-                class="drawer-filter-btn flex-1 flex items-center justify-between pl-4 pr-2 py-3 text-sm font-bold text-left transition ${
-                  isGroupActive ? 'text-white' : 'hover:bg-blush-50'
-                }"
+                data-main-id="${mainId}"
+                class="flex-1 flex items-center justify-between px-3.5 py-2.5 text-sm transition ${itemClass(mainActive)}"
               >
-                <span class="flex items-center gap-2.5">
-                  <span class="text-base">${group.emoji}</span>
-                  <span>${escapeHtml(group.label)}</span>
-                </span>
-                <span class="text-xs font-bold px-2.5 py-0.5 rounded-full ${
-                  isGroupActive ? 'bg-white/25 text-white' : 'bg-blush-50 text-blush-600'
-                }">${groupCount}</span>
+                <span class="flex items-center gap-2"><span>${group.emoji}</span><span class="font-bold">${group.label}</span></span>
+                <span class="px-2 py-0.5 rounded-full text-xs font-bold ${badgeClass(mainActive)}">${groupCount}</span>
               </button>
-
               <button
-                type="button"
-                data-toggle-group="${escapeHtml(group.id)}"
-                aria-label="Rozbalit nebo sbalit ${escapeHtml(group.label)}"
-                class="drawer-toggle-btn w-11 h-11 flex items-center justify-center shrink-0 transition ${
-                  isGroupActive ? 'text-white/90 hover:bg-white/10' : 'text-blush-400 hover:bg-blush-50'
-                }"
+                data-toggle-group="${mainId}"
+                aria-label="Rozbalit nebo sbalit ${group.label}"
+                class="px-3 py-2.5 text-slate-400 hover:text-blush-600 transition"
               >
-                <svg
-                  class="w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                  viewBox="0 0 24 24"
-                >
+                <svg class="w-4 h-4 transition-transform ${expanded ? "rotate-180" : ""}" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
                 </svg>
               </button>
             </div>
 
-            <!-- Podkategorie -->
-            <div class="${isExpanded ? 'block' : 'hidden'} px-2.5 pb-2.5 pt-1.5 space-y-1 border-t border-blush-100/70 bg-blush-50/40">
-              ${subcategoriesHtml}
-            </div>
+            ${
+              expanded
+                ? `<div class="px-2 pb-2 pt-1 space-y-0.5 border-t border-blush-100/60">
+                    ${group.subs
+                      .map((sub) => {
+                        const subCount = recipes.filter(
+                          (r) => r.mainCategory === mainId && r.subCategory === sub.id
+                        ).length;
+                        const subActive = isActive("sub", mainId, sub.id);
+                        return `
+                          <button
+                            data-filter-type="sub"
+                            data-main-id="${mainId}"
+                            data-sub-id="${sub.id}"
+                            class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs transition ${itemClass(subActive)}"
+                          >
+                            <span class="flex items-center gap-2 truncate"><span>${sub.emoji}</span><span class="truncate">${sub.label}</span></span>
+                            <span class="px-1.5 py-0.5 rounded-full text-[11px] font-bold ${badgeClass(subActive)}">${subCount}</span>
+                          </button>
+                        `;
+                      })
+                      .join("")}
+                  </div>`
+                : ""
+            }
           </div>
         `;
-      });
-
-      els.drawerNav.innerHTML = html;
-
-      // Posluchače kliknutí na filtry v bočním menu
-      els.drawerNav.querySelectorAll('.drawer-filter-btn').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          const type = btn.dataset.filterType;
-          if (type === 'all') {
-            setFilter({ type: 'all', mainGroup: null, subCategory: null });
-          } else if (type === 'favorites') {
-            setFilter({ type: 'favorites', mainGroup: null, subCategory: null });
-          } else if (type === 'main') {
-            setFilter({ type: 'main', mainGroup: btn.dataset.mainGroup, subCategory: null });
-          } else if (type === 'sub') {
-            setFilter({
-              type: 'sub',
-              mainGroup: btn.dataset.mainGroup,
-              subCategory: btn.dataset.subCategory,
-            });
-          }
-        });
-      });
-
-      // Posluchače pro sbalení/rozbalení podkategorií
-      els.drawerNav.querySelectorAll('.drawer-toggle-btn').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          const groupId = btn.dataset.toggleGroup;
-          expandedGroups[groupId] = !expandedGroups[groupId];
-          renderDrawerNav();
-        });
-      });
-    }
-
-    // =========================================================================
-    // 7. VYKRESLOVÁNÍ SEZNAMU RECEPTŮ A OBLÍBENÝCH
-    // =========================================================================
-
-    function toggleFavorite(recipeId) {
-      const recipe = recipes.find((r) => r.id === recipeId);
-      if (!recipe) return;
-
-      recipe.isFavorite = !recipe.isFavorite;
-      saveRecipes();
-      renderRecipes();
-      renderDrawerNav();
-
-      // Pokud je zrovna otevřený detail tohoto receptu, aktualizujeme srdíčko
-      if (!els.detailModal.classList.contains('hidden') && activeRecipeId === recipeId) {
-        els.detailFavoriteBtn.innerHTML = getHeartSvg(recipe.isFavorite, 'w-5 h-5');
       }
 
-      showToast(recipe.isFavorite ? 'Přidáno do oblíbených ❤️' : 'Odebráno z oblíbených');
+      drawerNav.innerHTML = html;
     }
 
-    function renderRecipes() {
-      els.recipeCountLabel.textContent = formatRecipeCount(recipes.length);
+    drawerNav.addEventListener("click", (e) => {
+      const toggleBtn = e.target.closest("[data-toggle-group]");
+      if (toggleBtn) {
+        const id = toggleBtn.dataset.toggleGroup;
+        expandedGroups[id] = !expandedGroups[id];
+        renderDrawer();
+        return;
+      }
 
+      const filterBtn = e.target.closest("[data-filter-type]");
+      if (filterBtn) {
+        const type = filterBtn.dataset.filterType;
+        if (type === "all" || type === "favorites") {
+          currentFilter = { type };
+        } else if (type === "main") {
+          currentFilter = { type: "main", mainId: filterBtn.dataset.mainId };
+        } else if (type === "sub") {
+          currentFilter = {
+            type: "sub",
+            mainId: filterBtn.dataset.mainId,
+            subId: filterBtn.dataset.subId
+          };
+        }
+        renderAll();
+        closeDrawer();
+      }
+    });
+
+    // ----- FILTROVÁNÍ A VYKRESLENÍ KARET -----
+    function getFilteredRecipes() {
       const q = searchQuery.trim().toLowerCase();
 
-      const filtered = recipes.filter((r) => {
-        // 1. Filtr z levého menu
-        let matchesFilter = true;
-        if (activeFilter.type === 'favorites') {
-          matchesFilter = !!r.isFavorite;
-        } else if (activeFilter.type === 'main') {
-          matchesFilter = r.mainGroup === activeFilter.mainGroup;
-        } else if (activeFilter.type === 'sub') {
-          matchesFilter =
-            r.mainGroup === activeFilter.mainGroup && r.subCategory === activeFilter.subCategory;
+      return recipes.filter((r) => {
+        if (currentFilter.type === "favorites" && !r.favorite) return false;
+        if (currentFilter.type === "main" && r.mainCategory !== currentFilter.mainId) return false;
+        if (
+          currentFilter.type === "sub" &&
+          (r.mainCategory !== currentFilter.mainId || r.subCategory !== currentFilter.subId)
+        ) {
+          return false;
         }
 
-        if (!matchesFilter) return false;
-
-        // 2. Vyhledávání v reálném čase (název, ingredience, kategorie)
-        if (!q) return true;
-        const inTitle = (r.title || '').toLowerCase().includes(q);
-        const inGroup = (r.mainGroup || '').toLowerCase().includes(q);
-        const inSub = (r.subCategory || '').toLowerCase().includes(q);
-        const inIngredients =
-          Array.isArray(r.ingredients) &&
-          r.ingredients.some((ing) => ing.toLowerCase().includes(q));
-
-        return inTitle || inGroup || inSub || inIngredients;
+        if (q) {
+          const hay = [
+            r.title || "",
+            ...(r.ingredients || []),
+            r.notes || ""
+          ]
+            .join(" ")
+            .toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        return true;
       });
+    }
 
-      if (filtered.length === 0) {
-        els.recipesGrid.innerHTML = '';
-        els.emptyState.classList.remove('hidden');
+    function updateFilterUI(filteredCount) {
+      recipeCountBadge.textContent = filteredCount;
+
+      if (currentFilter.type === "all") {
+        headerSubtitle.textContent = "Všechny recepty";
+        activeFilterBar.classList.add("hidden");
+      } else if (currentFilter.type === "favorites") {
+        headerSubtitle.textContent = "Oblíbené recepty";
+        activeFilterLabel.textContent = "❤️ Oblíbené";
+        activeFilterBar.classList.remove("hidden");
+      } else if (currentFilter.type === "main") {
+        const main = CATEGORIES[currentFilter.mainId];
+        headerSubtitle.textContent = main.label;
+        activeFilterLabel.textContent = `${main.emoji} ${main.label}`;
+        activeFilterBar.classList.remove("hidden");
+      } else if (currentFilter.type === "sub") {
+        const { main, sub } = getCategoryInfo(currentFilter.mainId, currentFilter.subId);
+        headerSubtitle.textContent = `${main.label} › ${sub.label}`;
+        activeFilterLabel.textContent = `${main.label} › ${sub.label}`;
+        activeFilterBar.classList.remove("hidden");
+      }
+    }
+
+    function renderGrid() {
+      const list = getFilteredRecipes();
+      updateFilterUI(list.length);
+
+      if (list.length === 0) {
+        recipesGrid.innerHTML = "";
+        emptyState.classList.remove("hidden");
+        emptyState.classList.add("flex");
 
         if (recipes.length === 0) {
-          els.emptyTitle.textContent = 'Kuchařka je zatím prázdná';
-          els.emptySubtitle.textContent = 'Přidej svůj první recept a měj ho vždy po ruce.';
-          els.emptyActionBtn.textContent = 'Přidat první recept';
-          els.emptyActionBtn.onclick = () => openFormModal();
+          emptyTitle.textContent = "Zatím tu nejsou žádné recepty";
+          emptyDesc.textContent = "Přidej svůj první oblíbený recept klepnutím na růžové tlačítko plus.";
+          emptyAddBtn.classList.remove("hidden");
         } else {
-          els.emptyTitle.textContent = 'Žádný recept nenalezen';
-          els.emptySubtitle.textContent =
-            activeFilter.type === 'favorites'
-              ? 'Zatím nemáš žádné oblíbené recepty. Klepni na srdíčko u receptu.'
-              : 'Zkus změnit hledaný výraz nebo zrušit aktivní filtr.';
-          els.emptyActionBtn.textContent = 'Zobrazit všechny recepty';
-          els.emptyActionBtn.onclick = () => {
-            searchQuery = '';
-            els.searchInput.value = '';
-            els.clearSearchBtn.classList.add('hidden');
-            resetFilter();
-          };
+          emptyTitle.textContent = "Nic jsme nenašli";
+          emptyDesc.textContent = "V této kategorii nebo pro toto hledání zatím žádný recept není.";
+          emptyAddBtn.classList.add("hidden");
         }
         return;
       }
 
-      els.emptyState.classList.add('hidden');
+      emptyState.classList.add("hidden");
+      emptyState.classList.remove("flex");
 
-      els.recipesGrid.innerHTML = filtered
-        .map((recipe) => {
-          const emoji = getCategoryEmoji(recipe.mainGroup, recipe.subCategory);
-          const photoHtml = recipe.photo
-            ? `<img src="${recipe.photo}" alt="${escapeHtml(recipe.title)}" class="w-full h-44 object-cover" loading="lazy" />`
-            : `<div class="w-full h-36 bg-gradient-to-br from-blush-200 via-blush-100 to-rose-200 flex items-center justify-center">
-                 <span class="text-5xl drop-shadow-sm select-none">${emoji}</span>
-               </div>`;
-
-          const timeBadge = recipe.time
-            ? `<span class="inline-flex items-center gap-1 text-xs font-semibold text-blush-700 bg-blush-50 px-2.5 py-1 rounded-xl">
-                 ⏱️ ${escapeHtml(recipe.time)} min
-               </span>`
-            : '';
-
-          const servingsBadge = recipe.servings
-            ? `<span class="inline-flex items-center gap-1 text-xs font-medium text-slate-500 bg-slate-50 px-2.5 py-1 rounded-xl">
-                 🍽️ ${escapeHtml(formatServings(recipe.servings))}
-               </span>`
-            : '';
-
+      recipesGrid.innerHTML = list
+        .map((r) => {
+          const { main, sub } = getCategoryInfo(r.mainCategory, r.subCategory);
+          const imgs = getRecipeImages(r);
+          const coverImg = imgs[0] || "";
           return `
             <article
-              data-id="${escapeHtml(recipe.id)}"
-              class="recipe-card bg-white rounded-3xl overflow-hidden shadow-card border border-blush-100/80 active:scale-[0.98] transition cursor-pointer"
+              data-open-id="${r.id}"
+              class="group bg-white rounded-3xl overflow-hidden shadow-card border border-blush-100/90 hover:shadow-soft active:scale-[0.99] transition cursor-pointer flex flex-col"
             >
-              <div class="relative">
-                ${photoHtml}
+              <div class="relative h-44 bg-gradient-to-br from-blush-100 to-blush-200/70 overflow-hidden">
+                ${
+                  coverImg
+                    ? `<img src="${escapeHtml(coverImg)}" alt="${escapeHtml(r.title)}" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition duration-500" />`
+                    : `<div class="w-full h-full flex items-center justify-center text-5xl">${sub.emoji}</div>`
+                }
 
-                <!-- Štítek hlavní kategorie a podkategorie -->
-                <span class="absolute top-3 left-3 bg-white/90 backdrop-blur-md text-blush-700 text-[11px] font-bold px-3 py-1.5 rounded-full shadow-sm">
-                  ${emoji} ${escapeHtml(recipe.mainGroup)} › ${escapeHtml(recipe.subCategory)}
-                </span>
-
-                <!-- Rychlé tlačítko Oblíbené (srdíčko) přímo na kartě -->
                 <button
                   type="button"
-                  data-fav-id="${escapeHtml(recipe.id)}"
+                  data-fav-id="${r.id}"
                   aria-label="Přepnout oblíbené"
-                  class="card-fav-btn absolute top-2.5 right-2.5 w-10 h-10 rounded-full bg-white/90 backdrop-blur-md shadow-sm flex items-center justify-center active:scale-90 transition"
+                  class="absolute top-3 right-3 w-9 h-9 rounded-full bg-white/90 backdrop-blur shadow-sm flex items-center justify-center text-base hover:scale-110 active:scale-95 transition"
                 >
-                  ${getHeartSvg(recipe.isFavorite, 'w-5 h-5')}
+                  ${r.favorite ? "❤️" : "🤍"}
                 </button>
+
+                <span class="absolute bottom-2.5 left-2.5 px-2.5 py-1 rounded-full bg-white/90 backdrop-blur text-blush-700 text-[11px] font-bold shadow-sm">
+                  ${sub.emoji} ${escapeHtml(sub.label)}
+                </span>
+
+                ${
+                  imgs.length > 1
+                    ? `<span class="absolute bottom-2.5 right-2.5 px-2 py-0.5 rounded-full bg-slate-900/65 backdrop-blur-sm text-white text-[11px] font-bold shadow-sm">
+                        📷 ${imgs.length}
+                      </span>`
+                    : ""
+                }
               </div>
 
-              <div class="p-4">
-                <h2 class="text-base font-bold text-slate-900 leading-snug mb-2.5">${escapeHtml(recipe.title)}</h2>
-                <div class="flex items-center flex-wrap gap-2">
-                  ${timeBadge}
-                  ${servingsBadge}
-                  <span class="ml-auto text-xs font-medium text-slate-400">
-                    ${recipe.ingredients ? recipe.ingredients.length : 0} surovin
-                  </span>
+              <div class="p-4 flex-1 flex flex-col justify-between">
+                <h3 class="font-bold text-slate-800 text-base leading-snug line-clamp-2">
+                  ${escapeHtml(r.title)}
+                </h3>
+
+                <div class="flex items-center gap-3 mt-3 text-xs font-medium text-slate-500">
+                  ${r.prepTime ? `<span class="flex items-center gap-1">⏱️ ${escapeHtml(r.prepTime)}</span>` : ""}
+                  ${r.servings ? `<span class="flex items-center gap-1">🍽️ ${escapeHtml(r.servings)}</span>` : ""}
+                  ${!r.prepTime && !r.servings ? `<span class="text-slate-400">${main.label}</span>` : ""}
                 </div>
               </div>
             </article>
           `;
         })
-        .join('');
+        .join("");
+    }
 
-      // Kliknutí na srdíčko na kartě (nesmí otevřít detail)
-      document.querySelectorAll('.card-fav-btn').forEach((btn) => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          toggleFavorite(btn.dataset.favId);
-        });
-      });
+    function renderAll() {
+      renderDrawer();
+      renderGrid();
+    }
 
-      // Kliknutí na kartu otevře detail receptu
-      document.querySelectorAll('.recipe-card').forEach((card) => {
-        card.addEventListener('click', () => openDetailModal(card.dataset.id));
+    // Vyhledávání & rušení filtru
+    searchInput.addEventListener("input", () => {
+      searchQuery = searchInput.value;
+      clearSearchBtn.classList.toggle("hidden", !searchQuery);
+      renderGrid();
+    });
+
+    clearSearchBtn.addEventListener("click", () => {
+      searchInput.value = "";
+      searchQuery = "";
+      clearSearchBtn.classList.add("hidden");
+      renderGrid();
+    });
+
+    clearFilterChip.addEventListener("click", () => {
+      currentFilter = { type: "all" };
+      renderAll();
+    });
+
+    // Kliknutí na kartu nebo srdíčko
+    recipesGrid.addEventListener("click", async (e) => {
+      const favBtn = e.target.closest("[data-fav-id]");
+      if (favBtn) {
+        e.stopPropagation();
+        const id = favBtn.dataset.favId;
+        const recipe = recipes.find((r) => r.id === id);
+        if (recipe) {
+          await updateDoc(doc(db, "recipes", id), { favorite: !recipe.favorite });
+        }
+        return;
+      }
+
+      const card = e.target.closest("[data-open-id]");
+      if (card) {
+        const recipe = recipes.find((r) => r.id === card.dataset.openId);
+        if (recipe) openDetailModal(recipe);
+      }
+    });
+
+    // ----- DETAIL RECEPTU + GALERIE -----
+    function openDetailModal(recipe) {
+      activeDetailId = recipe.id;
+      detailCurrentSlide = 0;
+      renderDetailModal(recipe);
+      detailModal.classList.remove("hidden");
+      document.body.classList.add("overflow-hidden");
+    }
+
+    function updateDetailGalleryIndicators() {
+      const total = detailImages.length;
+      if (total <= 1) return;
+
+      detailGalleryCounter.textContent = `${detailCurrentSlide + 1} / ${total}`;
+      detailGalleryDots.querySelectorAll("button").forEach((dot, idx) => {
+        if (idx === detailCurrentSlide) {
+          dot.className = "w-2.5 h-2 rounded-full bg-white transition-all";
+        } else {
+          dot.className = "w-1.5 h-1.5 rounded-full bg-white/50 transition-all";
+        }
       });
     }
 
-    // =========================================================================
-    // 8. DETAIL RECEPTU A ODŠKRTÁVÁNÍ INGREDIENCÍ
-    // =========================================================================
+    function scrollDetailGalleryTo(index) {
+      if (detailImages.length === 0) return;
+      const safeIndex = (index + detailImages.length) % detailImages.length;
+      detailCurrentSlide = safeIndex;
+      const width = detailGalleryTrack.clientWidth;
+      detailGalleryTrack.scrollTo({ left: safeIndex * width, behavior: "smooth" });
+      updateDetailGalleryIndicators();
+    }
 
-    function openDetailModal(recipeId) {
-      const recipe = recipes.find((r) => r.id === recipeId);
-      if (!recipe) return;
+    function renderDetailModal(recipe) {
+      const { main, sub } = getCategoryInfo(recipe.mainCategory, recipe.subCategory);
+      detailImages = getRecipeImages(recipe);
 
-      activeRecipeId = recipe.id;
-      const emoji = getCategoryEmoji(recipe.mainGroup, recipe.subCategory);
+      if (detailImages.length > 0) {
+        detailPlaceholder.classList.add("hidden");
+        detailGalleryTrack.classList.remove("hidden");
+        detailFullscreenHint.classList.remove("hidden");
 
-      // Fotka nebo růžový gradientový placeholder
-      if (recipe.photo) {
-        els.detailHero.innerHTML = `
-          <img src="${recipe.photo}" alt="${escapeHtml(recipe.title)}" class="w-full h-full object-cover" />
-          <div class="absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-black/15"></div>
-        `;
+        detailGalleryTrack.innerHTML = detailImages
+          .map(
+            (url, idx) => `
+              <div class="w-full h-full shrink-0 snap-center relative cursor-zoom-in" data-lightbox-index="${idx}">
+                <img
+                  src="${escapeHtml(url)}"
+                  alt="${escapeHtml(recipe.title)} – fotka ${idx + 1}"
+                  class="w-full h-full object-cover"
+                />
+              </div>
+            `
+          )
+          .join("");
+
+        detailGalleryTrack.scrollLeft = 0;
+        detailCurrentSlide = 0;
+
+        if (detailImages.length > 1) {
+          detailGalleryPrev.classList.remove("hidden");
+          detailGalleryNext.classList.remove("hidden");
+          detailGalleryDots.classList.remove("hidden");
+          detailGalleryCounter.classList.remove("hidden");
+          detailGalleryDots.innerHTML = detailImages
+            .map(
+              (_, idx) =>
+                `<button type="button" data-slide-to="${idx}" aria-label="Fotka ${idx + 1}" class="w-1.5 h-1.5 rounded-full bg-white/50 transition-all"></button>`
+            )
+            .join("");
+          updateDetailGalleryIndicators();
+        } else {
+          detailGalleryPrev.classList.add("hidden");
+          detailGalleryNext.classList.add("hidden");
+          detailGalleryDots.classList.add("hidden");
+          detailGalleryCounter.classList.add("hidden");
+        }
       } else {
-        els.detailHero.innerHTML = `
-          <div class="w-full h-full bg-gradient-to-br from-blush-300 via-blush-200 to-rose-200 flex items-center justify-center">
-            <span class="text-7xl drop-shadow-sm select-none">${emoji}</span>
-          </div>
-        `;
+        detailGalleryTrack.classList.add("hidden");
+        detailGalleryTrack.innerHTML = "";
+        detailGalleryPrev.classList.add("hidden");
+        detailGalleryNext.classList.add("hidden");
+        detailGalleryDots.classList.add("hidden");
+        detailGalleryCounter.classList.add("hidden");
+        detailFullscreenHint.classList.add("hidden");
+        detailPlaceholder.textContent = sub.emoji;
+        detailPlaceholder.classList.remove("hidden");
       }
 
-      els.detailFavoriteBtn.innerHTML = getHeartSvg(recipe.isFavorite, 'w-5 h-5');
-      els.detailTitle.textContent = recipe.title;
+      detailFavBtn.textContent = recipe.favorite ? "❤️" : "🤍";
+      detailCategoryBadge.textContent = `${main.emoji} ${main.label} › ${sub.label}`;
+      detailTitle.textContent = recipe.title;
 
-      // Štítky kategorie, podkategorie, času a porcí
-      const badges = [
-        `<span class="bg-blush-100 text-blush-700 text-xs font-bold px-3 py-1.5 rounded-xl">${emoji} ${escapeHtml(recipe.mainGroup)} › ${escapeHtml(recipe.subCategory)}</span>`,
-      ];
-      if (recipe.time) {
-        badges.push(`<span class="bg-white text-slate-700 border border-blush-100 text-xs font-semibold px-3 py-1.5 rounded-xl">⏱️ ${escapeHtml(recipe.time)} min</span>`);
-      }
-      if (recipe.servings) {
-        badges.push(`<span class="bg-white text-slate-700 border border-blush-100 text-xs font-semibold px-3 py-1.5 rounded-xl">🍽️ ${escapeHtml(formatServings(recipe.servings))}</span>`);
-      }
-      els.detailBadges.innerHTML = badges.join('');
+      const metaParts = [];
+      if (recipe.prepTime) metaParts.push(`<span>⏱️ ${escapeHtml(recipe.prepTime)}</span>`);
+      if (recipe.servings) metaParts.push(`<span>🍽️ ${escapeHtml(recipe.servings)}</span>`);
+      detailMeta.innerHTML = metaParts.join("");
 
-      if (!checkedIngredients[recipe.id]) {
-        checkedIngredients[recipe.id] = new Set();
+      const ings = Array.isArray(recipe.ingredients) ? recipe.ingredients.filter(Boolean) : [];
+      if (ings.length > 0) {
+        detailIngredientsSection.classList.remove("hidden");
+        detailIngredientsList.innerHTML = ings
+          .map(
+            (ing) => `
+              <li class="ingredient-item flex items-start gap-3 p-2.5 rounded-2xl bg-blush-50/70 border border-blush-100 cursor-pointer select-none transition">
+                <span class="ing-box w-5 h-5 mt-0.5 rounded-lg border-2 border-blush-300 bg-white flex items-center justify-center text-white text-xs font-bold shrink-0 transition"></span>
+                <span class="ing-text text-sm text-slate-700 leading-snug transition">${escapeHtml(ing)}</span>
+              </li>
+            `
+          )
+          .join("");
+      } else {
+        detailIngredientsSection.classList.add("hidden");
       }
-      renderDetailIngredients(recipe);
 
-      els.detailSteps.textContent = recipe.steps;
+      if (recipe.instructions && recipe.instructions.trim()) {
+        detailInstructionsSection.classList.remove("hidden");
+        detailInstructions.textContent = recipe.instructions;
+      } else {
+        detailInstructionsSection.classList.add("hidden");
+      }
 
       if (recipe.notes && recipe.notes.trim()) {
-        els.detailNotes.textContent = recipe.notes;
-        els.detailNotesSection.classList.remove('hidden');
+        detailNotesSection.classList.remove("hidden");
+        detailNotes.textContent = recipe.notes;
       } else {
-        els.detailNotesSection.classList.add('hidden');
+        detailNotesSection.classList.add("hidden");
       }
-
-      els.detailModal.classList.remove('hidden');
-      document.body.style.overflow = 'hidden';
     }
 
-    function renderDetailIngredients(recipe) {
-      const checkedSet = checkedIngredients[recipe.id] || new Set();
-      const total = recipe.ingredients.length;
-      const doneCount = checkedSet.size;
+    // Synchronizace indikátorů při swipe posunu v galerii
+    let galleryScrollTimer = null;
+    detailGalleryTrack.addEventListener("scroll", () => {
+      if (detailImages.length <= 1) return;
+      clearTimeout(galleryScrollTimer);
+      galleryScrollTimer = setTimeout(() => {
+        const width = detailGalleryTrack.clientWidth || 1;
+        const idx = Math.round(detailGalleryTrack.scrollLeft / width);
+        if (idx !== detailCurrentSlide && idx >= 0 && idx < detailImages.length) {
+          detailCurrentSlide = idx;
+          updateDetailGalleryIndicators();
+        }
+      }, 60);
+    });
 
-      els.ingredientsProgress.textContent = `${doneCount}/${total} hotovo`;
+    detailGalleryPrev.addEventListener("click", (e) => {
+      e.stopPropagation();
+      scrollDetailGalleryTo(detailCurrentSlide - 1);
+    });
 
-      els.detailIngredients.innerHTML = recipe.ingredients
-        .map((item, idx) => {
-          const isChecked = checkedSet.has(idx);
-          return `
-            <li
-              data-index="${idx}"
-              class="ingredient-row flex items-start gap-3 p-2.5 -mx-2 rounded-2xl hover:bg-blush-50/70 active:bg-blush-100/70 cursor-pointer transition select-none"
-            >
-              <span class="mt-0.5 w-6 h-6 shrink-0 rounded-lg border-2 flex items-center justify-center transition ${
-                isChecked
-                  ? 'bg-blush-500 border-blush-500 text-white'
-                  : 'border-blush-300 bg-white text-transparent'
-              }">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-                </svg>
-              </span>
-              <span class="text-sm leading-snug transition ${
-                isChecked ? 'line-through text-slate-400' : 'text-slate-700 font-medium'
-              }">
-                ${escapeHtml(item)}
-              </span>
-            </li>
-          `;
-        })
-        .join('');
+    detailGalleryNext.addEventListener("click", (e) => {
+      e.stopPropagation();
+      scrollDetailGalleryTo(detailCurrentSlide + 1);
+    });
 
-      document.querySelectorAll('.ingredient-row').forEach((row) => {
-        row.addEventListener('click', () => {
-          const index = Number(row.dataset.index);
-          if (checkedSet.has(index)) {
-            checkedSet.delete(index);
-          } else {
-            checkedSet.add(index);
-          }
-          renderDetailIngredients(recipe);
-        });
+    detailGalleryDots.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-slide-to]");
+      if (!btn) return;
+      scrollDetailGalleryTo(Number(btn.dataset.slideTo));
+    });
+
+    // Rozkliknutí fotky v detailu na celou obrazovku
+    detailGalleryTrack.addEventListener("click", (e) => {
+      const slide = e.target.closest("[data-lightbox-index]");
+      if (!slide || detailImages.length === 0) return;
+      openLightbox(detailImages, Number(slide.dataset.lightboxIndex));
+    });
+
+    function closeDetailModal() {
+      activeDetailId = null;
+      detailModal.classList.add("hidden");
+      document.body.classList.remove("overflow-hidden");
+    }
+
+    closeDetailBtn.addEventListener("click", closeDetailModal);
+    detailModal.addEventListener("click", (e) => {
+      if (e.target === detailModal) closeDetailModal();
+    });
+
+    // ----- LIGHTBOX (CELÁ OBRAZOVKA) -----
+    function openLightbox(images, startIndex = 0) {
+      lightboxImages = images;
+      lightboxIndex = startIndex;
+      renderLightbox();
+      lightboxModal.classList.remove("hidden");
+    }
+
+    function renderLightbox() {
+      const total = lightboxImages.length;
+      if (total === 0) return;
+
+      lightboxImg.src = lightboxImages[lightboxIndex];
+      lightboxCounter.textContent = `${lightboxIndex + 1} / ${total}`;
+
+      if (total > 1) {
+        lightboxPrevBtn.classList.remove("hidden");
+        lightboxNextBtn.classList.remove("hidden");
+        lightboxDots.innerHTML = lightboxImages
+          .map(
+            (_, idx) => `
+              <button
+                type="button"
+                data-lb-dot="${idx}"
+                aria-label="Fotka ${idx + 1}"
+                class="${idx === lightboxIndex ? "w-3 h-2 bg-white" : "w-2 h-2 bg-white/40"} rounded-full transition-all"
+              ></button>
+            `
+          )
+          .join("");
+      } else {
+        lightboxPrevBtn.classList.add("hidden");
+        lightboxNextBtn.classList.add("hidden");
+        lightboxDots.innerHTML = "";
+      }
+    }
+
+    function stepLightbox(delta) {
+      if (lightboxImages.length <= 1) return;
+      lightboxIndex = (lightboxIndex + delta + lightboxImages.length) % lightboxImages.length;
+      renderLightbox();
+    }
+
+    function closeLightbox() {
+      lightboxModal.classList.add("hidden");
+      lightboxImg.src = "";
+    }
+
+    closeLightboxBtn.addEventListener("click", closeLightbox);
+    lightboxPrevBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      stepLightbox(-1);
+    });
+    lightboxNextBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      stepLightbox(1);
+    });
+    lightboxDots.addEventListener("click", (e) => {
+      const dot = e.target.closest("[data-lb-dot]");
+      if (!dot) return;
+      lightboxIndex = Number(dot.dataset.lbDot);
+      renderLightbox();
+    });
+    lightboxStage.addEventListener("click", (e) => {
+      if (e.target === lightboxStage) closeLightbox();
+    });
+
+    // Swipe prstem v lightboxu
+    lightboxStage.addEventListener("touchstart", (e) => {
+      lightboxTouchStartX = e.changedTouches[0].screenX;
+    }, { passive: true });
+
+    lightboxStage.addEventListener("touchend", (e) => {
+      const dx = e.changedTouches[0].screenX - lightboxTouchStartX;
+      if (Math.abs(dx) > 45) {
+        stepLightbox(dx < 0 ? 1 : -1);
+      }
+    }, { passive: true });
+
+    // Klávesnice pro lightbox
+    document.addEventListener("keydown", (e) => {
+      if (lightboxModal.classList.contains("hidden")) return;
+      if (e.key === "Escape") closeLightbox();
+      if (e.key === "ArrowLeft") stepLightbox(-1);
+      if (e.key === "ArrowRight") stepLightbox(1);
+    });
+
+    // Odškrtávání ingrediencí při vaření
+    detailIngredientsList.addEventListener("click", (e) => {
+      const item = e.target.closest(".ingredient-item");
+      if (!item) return;
+      const box = item.querySelector(".ing-box");
+      const text = item.querySelector(".ing-text");
+      const checked = item.dataset.checked === "true";
+
+      if (checked) {
+        item.dataset.checked = "false";
+        box.classList.remove("bg-blush-500", "border-blush-500");
+        box.classList.add("bg-white", "border-blush-300");
+        box.textContent = "";
+        text.classList.remove("line-through", "text-slate-400");
+        text.classList.add("text-slate-700");
+      } else {
+        item.dataset.checked = "true";
+        box.classList.add("bg-blush-500", "border-blush-500");
+        box.classList.remove("bg-white", "border-blush-300");
+        box.textContent = "✓";
+        text.classList.add("line-through", "text-slate-400");
+        text.classList.remove("text-slate-700");
+      }
+    });
+
+    detailFavBtn.addEventListener("click", async () => {
+      const recipe = recipes.find((r) => r.id === activeDetailId);
+      if (!recipe) return;
+      await updateDoc(doc(db, "recipes", recipe.id), { favorite: !recipe.favorite });
+    });
+
+    detailEditBtn.addEventListener("click", () => {
+      const recipe = recipes.find((r) => r.id === activeDetailId);
+      if (!recipe) return;
+      closeDetailModal();
+      openFormModal(recipe);
+    });
+
+    detailDeleteBtn.addEventListener("click", async () => {
+      const recipe = recipes.find((r) => r.id === activeDetailId);
+      if (!recipe) return;
+      if (!confirm(`Opravdu chceš smazat recept „${recipe.title}“?`)) return;
+
+      try {
+        await deleteDoc(doc(db, "recipes", recipe.id));
+        closeDetailModal();
+        showToast("Recept byl smazán");
+      } catch (err) {
+        console.error(err);
+        showToast("Nepodařilo se smazat recept");
+      }
+    });
+
+    // ----- FORMULÁŘ PŘIDÁNÍ / ÚPRAVY (VÍCE FOTEK) -----
+    function cleanupNewPhotoPreviews() {
+      formPhotos.forEach((p) => {
+        if (p.type === "new" && p.previewUrl) {
+          URL.revokeObjectURL(p.previewUrl);
+        }
       });
     }
 
-    function closeDetailModal() {
-      els.detailModal.classList.add('hidden');
-      document.body.style.overflow = '';
-    }
-
-    // =========================================================================
-    // 9. PŘIDÁNÍ A ÚPRAVA RECEPTU (DYNAMICKÉ PODKATEGORIE)
-    // =========================================================================
-
-    function populateSubcategories(mainGroup, selectedSub = null) {
-      const groupObj = CATEGORY_TREE.find((g) => g.id === mainGroup) || CATEGORY_TREE[0];
-      els.fieldSubCategory.innerHTML = groupObj.subcategories
-        .map(
-          (sub) =>
-            `<option value="${escapeHtml(sub.id)}">${sub.emoji} ${escapeHtml(sub.id)}</option>`
-        )
-        .join('');
-
-      if (selectedSub && groupObj.subcategories.some((s) => s.id === selectedSub)) {
-        els.fieldSubCategory.value = selectedSub;
+    function renderFormPhotos() {
+      if (formPhotos.length === 0) {
+        photosPreviewGrid.classList.add("hidden");
+        photosPreviewGrid.innerHTML = "";
+        photoUploadTitle.textContent = "Vybrat nebo vyfotit jídlo";
+        photoCountHint.textContent = "První fotka je hlavní";
+        return;
       }
+
+      photosPreviewGrid.classList.remove("hidden");
+      photoUploadTitle.textContent = "+ Přidat další fotku";
+      photoCountHint.textContent = `${formPhotos.length} ${
+        formPhotos.length === 1 ? "fotka" : formPhotos.length < 5 ? "fotky" : "fotek"
+      } • 1. je hlavní`;
+
+      photosPreviewGrid.innerHTML = formPhotos
+        .map((photo, idx) => {
+          const src = photo.type === "existing" ? photo.url : photo.previewUrl;
+          const isMain = idx === 0;
+          return `
+            <div class="relative aspect-square rounded-2xl overflow-hidden border-2 ${
+              isMain ? "border-blush-500 shadow-sm" : "border-blush-200"
+            } bg-blush-50 group">
+              <img src="${escapeHtml(src)}" alt="Náhled ${idx + 1}" class="w-full h-full object-cover" />
+
+              ${
+                isMain
+                  ? `<span class="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-full bg-blush-500 text-white text-[10px] font-bold shadow">
+                      ★ Hlavní
+                    </span>`
+                  : `<button
+                      type="button"
+                      data-make-main="${idx}"
+                      title="Nastavit jako hlavní fotku"
+                      class="absolute bottom-1.5 left-1.5 px-2 py-0.5 rounded-full bg-slate-900/70 hover:bg-blush-500 text-white text-[10px] font-semibold transition"
+                    >
+                      ★ Hlavní
+                    </button>`
+              }
+
+              <button
+                type="button"
+                data-remove-photo="${idx}"
+                aria-label="Odebrat fotku"
+                class="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-slate-900/75 hover:bg-rose-600 text-white text-xs font-bold flex items-center justify-center transition"
+              >
+                ✕
+              </button>
+            </div>
+          `;
+        })
+        .join("");
     }
 
-    function updatePhotoPreview(dataUrl) {
-      currentPhotoDataUrl = dataUrl || '';
-      if (currentPhotoDataUrl) {
-        els.photoPreviewImg.src = currentPhotoDataUrl;
-        els.photoPreviewWrapper.classList.remove('hidden');
-        els.photoUploadLabel.classList.add('hidden');
+    photosPreviewGrid.addEventListener("click", (e) => {
+      const removeBtn = e.target.closest("[data-remove-photo]");
+      if (removeBtn) {
+        const idx = Number(removeBtn.dataset.removePhoto);
+        const removed = formPhotos.splice(idx, 1)[0];
+        if (removed && removed.type === "new" && removed.previewUrl) {
+          URL.revokeObjectURL(removed.previewUrl);
+        }
+        renderFormPhotos();
+        return;
+      }
+
+      const mainBtn = e.target.closest("[data-make-main]");
+      if (mainBtn) {
+        const idx = Number(mainBtn.dataset.makeMain);
+        if (idx > 0 && idx < formPhotos.length) {
+          const [chosen] = formPhotos.splice(idx, 1);
+          formPhotos.unshift(chosen);
+          renderFormPhotos();
+          showToast("Nastaveno jako hlavní fotka");
+        }
+      }
+    });
+
+    function openFormModal(recipe = null) {
+      cleanupNewPhotoPreviews();
+      recipeForm.reset();
+      formPhotos = [];
+
+      if (recipe) {
+        editingRecipeId = recipe.id;
+        formModalTitle.textContent = "Upravit recept";
+        recipeTitleInput.value = recipe.title || "";
+        mainCategorySelect.value = recipe.mainCategory || "slane";
+        populateSubCategories(mainCategorySelect.value, recipe.subCategory);
+        prepTimeInput.value = recipe.prepTime || "";
+        servingsInput.value = recipe.servings || "";
+        ingredientsInput.value = (recipe.ingredients || []).join("\n");
+        instructionsInput.value = recipe.instructions || "";
+        notesInput.value = recipe.notes || "";
+
+        formPhotos = getRecipeImages(recipe).map((url) => ({
+          type: "existing",
+          url
+        }));
       } else {
-        els.photoPreviewImg.src = '';
-        els.photoPreviewWrapper.classList.add('hidden');
-        els.photoUploadLabel.classList.remove('hidden');
-        els.fieldPhoto.value = '';
-      }
-    }
+        editingRecipeId = null;
+        formModalTitle.textContent = "Nový recept";
 
-    function openFormModal(recipeToEdit = null) {
-      els.recipeForm.reset();
-
-      if (recipeToEdit) {
-        els.formModalTitle.textContent = 'Upravit recept';
-        els.fieldId.value = recipeToEdit.id;
-        els.fieldTitle.value = recipeToEdit.title || '';
-        els.fieldMainGroup.value = recipeToEdit.mainGroup || 'Slané';
-        populateSubcategories(els.fieldMainGroup.value, recipeToEdit.subCategory);
-        els.fieldTime.value = recipeToEdit.time || '';
-        els.fieldServings.value = recipeToEdit.servings || '';
-        els.fieldIngredients.value = (recipeToEdit.ingredients || []).join('\n');
-        els.fieldSteps.value = recipeToEdit.steps || '';
-        els.fieldNotes.value = recipeToEdit.notes || '';
-        updatePhotoPreview(recipeToEdit.photo || '');
-      } else {
-        els.formModalTitle.textContent = 'Nový recept';
-        els.fieldId.value = '';
-
-        // Předvyplnění skupiny a podkategorie podle aktuálně zapnutého filtru
-        const defaultGroup =
-          activeFilter.mainGroup && CATEGORY_TREE.some((g) => g.id === activeFilter.mainGroup)
-            ? activeFilter.mainGroup
-            : 'Slané';
-        els.fieldMainGroup.value = defaultGroup;
-        populateSubcategories(defaultGroup, activeFilter.subCategory);
-        updatePhotoPreview('');
+        // Předvyplnění kategorie podle aktuálního filtru
+        const defaultMain =
+          currentFilter.type === "main" || currentFilter.type === "sub"
+            ? currentFilter.mainId
+            : "slane";
+        const defaultSub = currentFilter.type === "sub" ? currentFilter.subId : null;
+        mainCategorySelect.value = defaultMain;
+        populateSubCategories(defaultMain, defaultSub);
       }
 
-      els.formModal.classList.remove('hidden');
-      document.body.style.overflow = 'hidden';
+      renderFormPhotos();
+      formModal.classList.remove("hidden");
+      document.body.classList.add("overflow-hidden");
     }
 
     function closeFormModal() {
-      els.formModal.classList.add('hidden');
-      if (els.detailModal.classList.contains('hidden')) {
-        document.body.style.overflow = '';
-      }
+      cleanupNewPhotoPreviews();
+      formPhotos = [];
+      formModal.classList.add("hidden");
+      document.body.classList.remove("overflow-hidden");
+      editingRecipeId = null;
     }
 
-    function handleFormSubmit(event) {
-      event.preventDefault();
+    fabAddBtn.addEventListener("click", () => openFormModal());
+    emptyAddBtn.addEventListener("click", () => openFormModal());
+    closeFormBtn.addEventListener("click", closeFormModal);
+    formModal.addEventListener("click", (e) => {
+      if (e.target === formModal) closeFormModal();
+    });
 
-      const title = els.fieldTitle.value.trim();
-      const ingredientsLines = els.fieldIngredients.value
-        .split('\n')
-        .map((line) => line.trim())
-        .filter(Boolean);
-      const steps = els.fieldSteps.value.trim();
+    mainCategorySelect.addEventListener("change", () => {
+      populateSubCategories(mainCategorySelect.value);
+    });
 
-      if (!title || ingredientsLines.length === 0 || !steps) {
-        showToast('Vyplň prosím název, ingredience i postup.', true);
-        return;
-      }
+    photoInput.addEventListener("change", () => {
+      const files = Array.from(photoInput.files || []);
+      if (files.length === 0) return;
 
-      const existingId = els.fieldId.value;
-      const existingRecipe = existingId ? recipes.find((r) => r.id === existingId) : null;
-
-      const recipeData = {
-        id: existingId || `rec-${Date.now()}`,
-        title,
-        mainGroup: els.fieldMainGroup.value,
-        subCategory: els.fieldSubCategory.value,
-        time: els.fieldTime.value ? Number(els.fieldTime.value) : null,
-        servings: els.fieldServings.value ? Number(els.fieldServings.value) : null,
-        photo: currentPhotoDataUrl,
-        isFavorite: existingRecipe ? !!existingRecipe.isFavorite : false,
-        ingredients: ingredientsLines,
-        steps,
-        notes: els.fieldNotes.value.trim(),
-        createdAt: existingRecipe ? existingRecipe.createdAt : Date.now(),
-      };
-
-      const previousRecipes = [...recipes];
-
-      if (existingId) {
-        const idx = recipes.findIndex((r) => r.id === existingId);
-        if (idx !== -1) recipes[idx] = recipeData;
-      } else {
-        recipes.unshift(recipeData);
-      }
-
-      if (!saveRecipes()) {
-        recipes = previousRecipes;
-        return;
-      }
-
-      closeFormModal();
-      renderRecipes();
-      renderDrawerNav();
-
-      if (existingId && !els.detailModal.classList.contains('hidden')) {
-        openDetailModal(existingId);
-        showToast('Recept byl upraven ✨');
-      } else {
-        showToast('Recept uložen do kuchařky 🍓');
-      }
-    }
-
-    // =========================================================================
-    // 10. MAZÁNÍ RECEPTU S POTVRZOVACÍM DIALOGEM
-    // =========================================================================
-
-    function openConfirmDeleteModal() {
-      const recipe = recipes.find((r) => r.id === activeRecipeId);
-      if (!recipe) return;
-      els.confirmMessage.textContent = `Opravdu chceš smazat recept „${recipe.title}“?`;
-      els.confirmModal.classList.remove('hidden');
-    }
-
-    function closeConfirmDeleteModal() {
-      els.confirmModal.classList.add('hidden');
-    }
-
-    function confirmDeleteRecipe() {
-      if (!activeRecipeId) return;
-      recipes = recipes.filter((r) => r.id !== activeRecipeId);
-      delete checkedIngredients[activeRecipeId];
-      saveRecipes();
-      closeConfirmDeleteModal();
-      closeDetailModal();
-      renderRecipes();
-      renderDrawerNav();
-      showToast('Recept byl smazán');
-    }
-
-    // =========================================================================
-    // 11. PROPOJENÍ UDÁLOSTÍ A SPUŠTĚNÍ APLIKACE
-    // =========================================================================
-
-    function initApp() {
-      loadRecipes();
-      populateSubcategories('Slané');
-      renderActiveFilterBar();
-      renderDrawerNav();
-      renderRecipes();
-
-      // Levý filtrovací drawer
-      els.openDrawerBtn.addEventListener('click', openDrawer);
-      els.closeDrawerBtn.addEventListener('click', closeDrawer);
-      els.drawerBackdrop.addEventListener('click', closeDrawer);
-
-      // Zrušení aktivního filtru jedním klepnutím na růžový štítek
-      els.activeFilterPill.addEventListener('click', resetFilter);
-
-      // Vyhledávání v reálném čase
-      els.searchInput.addEventListener('input', (e) => {
-        searchQuery = e.target.value;
-        els.clearSearchBtn.classList.toggle('hidden', searchQuery.length === 0);
-        renderRecipes();
+      files.forEach((file) => {
+        formPhotos.push({
+          type: "new",
+          file,
+          previewUrl: URL.createObjectURL(file)
+        });
       });
 
-      els.clearSearchBtn.addEventListener('click', () => {
-        searchQuery = '';
-        els.searchInput.value = '';
-        els.clearSearchBtn.classList.add('hidden');
-        renderRecipes();
-        els.searchInput.focus();
-      });
+      photoInput.value = "";
+      renderFormPhotos();
+    });
 
-      // Plovoucí tlačítko "+"
-      els.addRecipeFab.addEventListener('click', () => openFormModal());
+    recipeForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const title = recipeTitleInput.value.trim();
+      if (!title) return;
 
-      // Detail modal
-      els.closeDetailBtn.addEventListener('click', closeDetailModal);
-      els.detailModal.addEventListener('click', (e) => {
-        if (e.target === els.detailModal) closeDetailModal();
-      });
-      els.detailFavoriteBtn.addEventListener('click', () => {
-        if (activeRecipeId) toggleFavorite(activeRecipeId);
-      });
-      els.editRecipeBtn.addEventListener('click', () => {
-        const recipe = recipes.find((r) => r.id === activeRecipeId);
-        if (recipe) openFormModal(recipe);
-      });
-      els.deleteRecipeBtn.addEventListener('click', openConfirmDeleteModal);
+      saveRecipeBtn.disabled = true;
 
-      // Formulář a dynamická změna podkategorií
-      els.fieldMainGroup.addEventListener('change', (e) => {
-        populateSubcategories(e.target.value);
-      });
-      els.closeFormBtn.addEventListener('click', closeFormModal);
-      els.saveFormTopBtn.addEventListener('click', () => els.recipeForm.requestSubmit());
-      els.recipeForm.addEventListener('submit', handleFormSubmit);
+      try {
+        const finalImages = [];
+        const newCount = formPhotos.filter((p) => p.type === "new").length;
+        let uploadedCount = 0;
 
-      // Nahrání a komprese fotky
-      els.fieldPhoto.addEventListener('change', async (e) => {
-        const file = e.target.files && e.target.files[0];
-        if (!file) return;
-        try {
-          const resizedDataUrl = await resizeImageFile(file, 800, 0.75);
-          updatePhotoPreview(resizedDataUrl);
-          showToast('Fotka je připravená 📸');
-        } catch (err) {
-          console.error(err);
-          showToast('Fotku se nepodařilo nahrát.', true);
+        for (const photo of formPhotos) {
+          if (photo.type === "existing") {
+            finalImages.push(photo.url);
+          } else {
+            uploadedCount++;
+            saveRecipeBtn.innerHTML =
+              newCount > 1
+                ? `<span>Nahrávám fotku ${uploadedCount}/${newCount}…</span>`
+                : "<span>Nahrávám fotku…</span>";
+            const url = await uploadToCloudinary(photo.file);
+            finalImages.push(url);
+          }
         }
-      });
 
-      els.removePhotoBtn.addEventListener('click', () => updatePhotoPreview(''));
+        saveRecipeBtn.innerHTML = "<span>Ukládám recept…</span>";
 
-      // Potvrzení smazání
-      els.confirmCancelBtn.addEventListener('click', closeConfirmDeleteModal);
-      els.confirmDeleteBtn.addEventListener('click', confirmDeleteRecipe);
-      els.confirmModal.addEventListener('click', (e) => {
-        if (e.target === els.confirmModal) closeConfirmDeleteModal();
-      });
+        const ingredients = ingredientsInput.value
+          .split("\n")
+          .map((line) => line.trim())
+          .filter(Boolean);
 
-      // Zavření bočního menu klávesou Escape na počítači
-      document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && !els.drawerRoot.classList.contains('hidden')) {
-          closeDrawer();
+        const payload = {
+          title,
+          mainCategory: mainCategorySelect.value,
+          subCategory: subCategorySelect.value,
+          prepTime: prepTimeInput.value.trim(),
+          servings: servingsInput.value.trim(),
+          ingredients,
+          instructions: instructionsInput.value.trim(),
+          notes: notesInput.value.trim(),
+          images: finalImages,
+          imageUrl: finalImages[0] || "",
+          updatedAt: serverTimestamp()
+        };
+
+        if (editingRecipeId) {
+          await updateDoc(doc(db, "recipes", editingRecipeId), payload);
+          showToast("Recept byl upraven");
+        } else {
+          await addDoc(recipesCol, {
+            ...payload,
+            favorite: false,
+            createdAt: serverTimestamp()
+          });
+          showToast("Recept byl uložen");
         }
-      });
-    }
 
-    document.addEventListener('DOMContentLoaded', initApp);
+        closeFormModal();
+      } catch (err) {
+        console.error(err);
+        showToast("Chyba při ukládání. Zkus to prosím znovu.");
+      } finally {
+        saveRecipeBtn.disabled = false;
+        saveRecipeBtn.innerHTML = "<span>🦄</span>";
+      }
+    });
+
+    // ----- EXPORT ZÁLOHY (JSON) -----
+    exportBackupBtn.addEventListener("click", () => {
+      const dataStr = JSON.stringify(recipes, null, 2);
+      const blob = new Blob([dataStr], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const date = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `moje-recepty-zaloha-${date}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast("Záloha stažena");
+    });
+
+    // Inicializace výchozích podkategorií
+    populateSubCategories("slane");
   </script>
 </body>
 </html>
