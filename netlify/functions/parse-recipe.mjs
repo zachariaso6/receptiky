@@ -10,7 +10,7 @@ export default async (req) => {
     });
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = (process.env.GEMINI_API_KEY || "").trim();
   if (!apiKey) {
     return new Response(
       JSON.stringify({
@@ -65,27 +65,32 @@ Text receptu z poznámek:
 ${rawText}
 """`;
 
+  // Automatická volba adresy podle typu klíče (AQ. = Vertex AI Express, AIza = Gemini API)
+  const isVertexExpressKey = apiKey.startsWith("AQ.");
+  const endpoint = isVertexExpressKey
+    ? `https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`
+    : `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
+
   try {
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.2,
-            responseMimeType: "application/json"
-          }
-        })
-      }
-    );
+    const geminiRes = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.2,
+          responseMimeType: "application/json"
+        }
+      })
+    });
 
     if (!geminiRes.ok) {
       const errDetail = await geminiRes.text();
       console.error("Gemini API error:", geminiRes.status, errDetail);
       return new Response(
-        JSON.stringify({ error: "AI služba vrátila chybu. Zkontroluj API klíč nebo to zkus za chvilku." }),
+        JSON.stringify({
+          error: `AI služba vrátila chybu (${geminiRes.status}). Zkontroluj API klíč nebo to zkus za chvilku.`
+        }),
         { status: 502, headers: { "Content-Type": "application/json" } }
       );
     }
